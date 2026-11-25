@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ===================================================================
+     NEW RELIC BROWSER SNIPPET
+     Same Pro+SPA snippet as index.html. JavaScript error capture,
+     noticeError(), setErrorHandler() and addRelease() all need the Pro or
+     Pro+SPA agent. Keep the snippet first in <head> so errors thrown
+     early in page load are still captured.
+     =================================================================== -->
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="demo-identity.js"></script>
+<script src="site.js"></script>
+<script src="nr-init.js"></script>
+<!-- NR:SNIPPET -->
+<script src="nr-config.js"></script>
+<script src="nr-agent.js"></script>
+<!-- /NR:SNIPPET -->
+
+<title>Browser Errors Demo | New Relic</title>
+<link rel="icon" href="favicons/favicon.ico" sizes="48x48">
+<link rel="icon" href="favicons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="favicons/apple-touch-icon.png" sizes="180x180">
+<meta name="theme-color" content="#080F11">
+<meta name="description" content="Try New Relic browser error tracking: throw real JavaScript errors, report handled ones, filter and group them, then find your own errors in a shared account.">
+<!-- Link previews (Slack, email, social). The image URL is absolute, so it works from any host. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Browser Agent Playground">
+<meta property="og:title" content="Browser Errors Demo | New Relic">
+<meta property="og:description" content="Try New Relic browser error tracking: throw real JavaScript errors, report handled ones, filter and group them, then find your own errors in a shared account.">
+<meta property="og:image" content="https://mcaronnewrelic.github.io/BrowserAgentPlayground/images/vitals-hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* ---------- Playground ---------- */
+  .card .field label, .card .field .label { color: var(--black); }
+  .btn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .btn-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .err-btn {
+    appearance: none; cursor: pointer; text-align: left; border: 1px solid var(--line); background: var(--sys-white); color: var(--black);
+    border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+    font: 600 13px/1.25 var(--mono); letter-spacing: 0; transition: border-color .15s, background .15s, transform .1s;
+  }
+  .err-btn:hover { border-color: var(--black); background: #fff; }
+  .err-btn:active { transform: scale(.98); }
+  .err-btn small { font: 500 12px/1.35 var(--body); color: var(--ink-2); letter-spacing: -0.1px; }
+  .err-btn .meta { display: flex; gap: 6px; flex-wrap: wrap; }
+  .err-btn.recommended { border-color: var(--green-deep); box-shadow: inset 0 0 0 1px var(--green-deep); }
+
+  .chip.jse { background: var(--magenta-1); }
+  .chip.log { background: var(--blue-1); }
+  .chip.cls { background: transparent; box-shadow: inset 0 0 0 1px var(--gray); }
+  .entry .chip.cls, .scenario .chip.cls { color: var(--white); }
+
+  .rules { display: grid; gap: 12px; }
+  .rule { display: flex; flex-direction: column; gap: 10px; background: var(--sys-white); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; }
+  .rule-toggle { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; cursor: pointer; }
+  .rule-toggle code { font-weight: 500; font-size: 12.5px; color: var(--ink-2); }
+  .rule input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--black); margin: 0; }
+  .rule .rule-body { display: grid; gap: 10px; }
+  .rule .field label { font-size: 13px; font-weight: 500; color: var(--ink-2); margin-bottom: 4px; }
+  .rule .input { padding: 9px 12px; font-size: 15px; background: var(--white); }
+  .rule.off .rule-body { opacity: .45; }
+  .chip.dropped { background: rgba(253,252,240,.1); color: var(--sand); text-decoration: line-through; }
+
+  .scenario {
+    appearance: none; cursor: pointer; text-align: left; border: 0; background: var(--black); color: var(--white);
+    border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-height: 160px;
+    font: 500 14px/1.4 var(--body); transition: transform .12s, background .15s;
+  }
+
+  /* ---------- Feed ---------- */
+  .entry .line2 { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .status.reported { background: rgba(28,231,131,.16); color: var(--green); }
+  .status.grouped { background: rgba(61,157,255,.2); color: var(--blue-1); }
+  .status.ignored { background: rgba(253,252,240,.08); color: var(--sand); }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 560px) {
+    .btn-grid, .btn-grid.three { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <span>JavaScript error tracking is included with the Pro and Pro+SPA browser agent.</span>
+    <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/noticeerror/" target="_blank" rel="noopener">Read the docs</a>
+  </div>
+</div>
+
+<script>Demo.header()</script>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">New Relic browser monitoring</div>
+        <h1 class="display" style="margin-top:18px">Break things.<br>On purpose.</h1>
+        <p class="lede">Throw real JavaScript errors, report the ones you catch, decide which ones matter, then find every one of yours in a shared New Relic account.</p>
+        <div class="ctas">
+          <a class="btn" href="#try">Start breaking <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="btn secondary" href="#find">Jump to the query</a>
+        </div>
+        <div class="note">
+          <span class="chip jse" aria-hidden="true">JavaScriptError</span>
+          <span>Errors and logs are different event types. Uncaught errors and <code>noticeError()</code> create <strong>JavaScriptError</strong> events. <code>console.error</code> creates an ERROR <strong>Log</strong>. This page shows both.</span>
+        </div>
+      </div>
+      <div class="term" aria-label="Example error tracking code">
+        <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c">// 1. Uncaught errors are captured automatically</span>
+cart.total.toFixed(<span class="s">2</span>) <span class="c">// TypeError</span>
+
+<span class="c">// 2. Report errors you catch and handle</span>
+<span class="k">try</span> { applyCoupon(code) }
+<span class="k">catch</span> (err) {
+  newrelic.<span class="k">noticeError</span>(err, { coupon: code })
+}
+
+<span class="c">// 3. Drop the noise, group what matters</span>
+newrelic.<span class="k">setErrorHandler</span>(err =&gt;
+  /ResizeObserver/.test(err.message)
+    ? <span class="k">true</span> : { group: <span class="s">'Checkout'</span> })</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WHO ================= -->
+  <section class="who-bar">
+    <div class="wrap">
+      <details class="who" id="who">
+        <script>Demo.whoSummary()</script>
+        <div class="who-body">
+          <p class="muted">Everyone shares one New Relic account, so we tag your errors. Your name and code are attached as <code>demoUser</code> and <code>demoCode</code>. The error messages stay the same for everyone, so identical errors group together. Your name is also set as your end-user ID via <code>newrelic.setUserId()</code>, which is what powers the <b>Users affected</b> count in Errors Inbox.</p>
+          <script>Demo.identityForm()</script>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ================= TRY IT ================= -->
+  <section class="step" id="try">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Try it / Generate errors</div>
+        <h2 class="display" style="margin-top:14px">Break something</h2>
+        <p class="muted">These are real errors. Your browser console will show red text, and that is the point. The page keeps working, and the feed on the right shows what New Relic receives.</p>
+      </div>
+
+      <div class="primer">
+        <div>
+          <div class="tag-row"><div class="tag">You'll learn to</div><span class="chip both">Automatic + your code</span></div>
+          <ul><li>Tell uncaught errors apart from the ones you report with <code>noticeError()</code>.</li><li>Ignore noise and group related errors with <code>setErrorHandler()</code>.</li><li>Tag errors with a release using <code>addRelease()</code>, and find them in Errors Inbox.</li></ul>
+        </div>
+        <div>
+          <div class="tag-row"><div class="tag">Before you start</div></div>
+          <ul class="needs"><li><span class="chip where-default">On by default</span><span>JavaScript error collection (<code>init.jserrors</code>) is on by default.</span></li><li><span class="chip where-snippet">Snippet: NREUM.init</span><span><code>init.session_replay</code> records every session that hits an error on this site (<code>error_sampling_rate: 100</code>), so errors come with a replay.</span></li></ul>
+        </div>
+      </div>
+      <div class="identity page-setup">
+        <div class="field">
+          <label for="release">App version (addRelease)</label>
+          <select id="release" class="input">
+            <option value="2.4.0">checkout 2.4.0</option>
+            <option value="2.4.1" selected>checkout 2.4.1</option>
+            <option value="2.5.0-beta">checkout 2.5.0-beta</option>
+          </select>
+        </div>
+        <p class="hint"><code>addRelease()</code> stamps this version on every error you send, so you can compare releases in Errors Inbox.</p>
+      </div>
+
+      <div class="playground">
+        <div class="cards">
+
+          <!-- Automatic capture -->
+          <article class="card wide" aria-labelledby="autoTitle">
+            <div class="tag">Method 1 · Automatic</div>
+            <h3 id="autoTitle">Uncaught errors and promise rejections</h3>
+            <p>No code needed. The agent listens for anything your app fails to catch. Each button causes a genuine error of that type, so the error class and stack trace are real.</p>
+            <div class="btn-grid three" id="autoButtons"></div>
+          </article>
+
+          <!-- noticeError -->
+          <article class="card" aria-labelledby="noticeTitle">
+            <div class="tag">Method 2 · Handled errors</div>
+            <h3 id="noticeTitle"><code>newrelic.noticeError()</code></h3>
+            <p>Your code caught the error and recovered, but you still want to know. The user sees nothing.</p>
+            <div class="field">
+              <label for="noticeMsg">Error message</label>
+              <input id="noticeMsg" class="input" type="text" maxlength="200" value="Coupon service unavailable">
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="noticeType">Error type</label>
+                <select id="noticeType" class="input">
+                  <option value="Error">Error</option>
+                  <option value="TypeError">TypeError</option>
+                  <option value="ValidationError">ValidationError</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="attrKey">Attribute</label>
+                <input id="attrKey" class="input" type="text" maxlength="40" value="coupon" spellcheck="false">
+              </div>
+              <div class="field">
+                <label for="attrVal">Value</label>
+                <input id="attrVal" class="input" type="text" maxlength="80" value="FALL25">
+              </div>
+            </div>
+            <pre class="snippet" id="noticePreview" aria-label="Code that will run"></pre>
+            <div class="row" style="align-items:center">
+              <button id="noticeSend" class="btn" type="button">Catch and report <span class="arrow" aria-hidden="true">→</span></button>
+            </div>
+          </article>
+
+          <!-- setErrorHandler -->
+          <article class="card" aria-labelledby="handlerTitle">
+            <div class="tag">Method 3 · Filter and group</div>
+            <h3 id="handlerTitle"><code>newrelic.setErrorHandler()</code></h3>
+            <p>One handler sees every error before it is sent. Return <code>true</code> to drop it, or <code>{ group }</code> to label it in Errors Inbox. Edit the rules, then throw an error that matches.</p>
+            <div class="rules">
+              <div class="rule" id="ruleIgnore">
+                <label class="rule-toggle"><input type="checkbox" id="ignoreEnabled" checked> Ignore <code>return true</code></label>
+                <div class="rule-body">
+                  <div class="field"><label for="ignoreText">When the message contains</label><input id="ignoreText" class="input" type="text" value="ResizeObserver" spellcheck="false"></div>
+                </div>
+              </div>
+              <div class="rule" id="ruleGroup">
+                <label class="rule-toggle"><input type="checkbox" id="groupEnabled" checked> Group <code>return { group }</code></label>
+                <div class="rule-body">
+                  <div class="field"><label for="groupText">When the message contains</label><input id="groupText" class="input" type="text" value="payment" spellcheck="false"></div>
+                  <div class="field"><label for="groupLabel">Group label</label><input id="groupLabel" class="input" type="text" value="Payment failures"></div>
+                </div>
+              </div>
+            </div>
+            <div class="btn-grid" id="handlerButtons"></div>
+          </article>
+
+          <!-- Errors vs logs -->
+          <article class="card wide" aria-labelledby="vsTitle">
+            <div class="tag">Errors vs. error logs</div>
+            <h3 id="vsTitle">One failure, two signals</h3>
+            <p>An error tells you <em>what broke</em> with a stack trace, grouped in Errors Inbox. An ERROR log tells you <em>what was happening</em> in your own words. Send both, linked by a shared <code>errorId</code>, and you can jump from one to the other. Compare it with the <a href="index.html">Logs demo</a>.</p>
+            <div class="row">
+              <div class="field" style="flex: 1 1 240px">
+                <label for="vsMsg">What failed?</label>
+                <input id="vsMsg" class="input" type="text" maxlength="200" value="Saving shipping address failed">
+              </div>
+              <div class="btn-grid three" id="vsButtons" style="flex: 3 1 460px"></div>
+            </div>
+          </article>
+
+          <!-- Scenarios -->
+          <article class="card wide" aria-labelledby="scenTitle">
+            <div class="tag">Real-world scenarios</div>
+            <h3 id="scenTitle">What your users actually hit</h3>
+            <p>Each scenario plays out a short story using a mix of the methods above. Watch how the error handler rules change the outcome.</p>
+            <div class="scenarios" id="scenarioButtons"></div>
+          </article>
+
+        </div>
+
+        <!-- Activity feed -->
+        <aside class="feed" aria-labelledby="feedTitle">
+          <div class="feed-head">
+            <div class="top">
+              <h3 id="feedTitle">Activity feed</h3>
+              <button id="clearFeed" class="btn ghost-dark small" type="button">Clear</button>
+            </div>
+            <div class="feed-stats" aria-live="polite">
+              <span><b id="statErrors">0</b> errors</span>
+              <span><b id="statLogs">0</b> logs</span>
+              <span><b id="statGrouped">0</b> grouped</span>
+              <span><b id="statIgnored">0</b> ignored</span>
+              <span id="statUnsentWrap" hidden><b id="statUnsent">0</b> not sent</span>
+            </div>
+          </div>
+          <ul class="feed-list" id="feed">
+            <li class="feed-empty" id="feedEmpty">Nothing yet. Break something to see your first error.</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FIND IT ================= -->
+  <section class="step find" id="find">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Find it / In New Relic</div>
+        <h2 class="display" style="margin-top:14px">Find your errors</h2>
+        <p>Data arrives in batches, usually within a minute (<a href="install.html#timing">why</a>). Everything below is already filled in with your code, <code class="js-code" style="color:var(--green)">NR-XXXX</code>.</p>
+      </div>
+      <div class="find-grid">
+        <div class="find-step">1 · See it in New Relic</div>
+        <div class="find-card full">
+          <h3>See them in Errors Inbox and Session Replay</h3>
+          <ol>
+            <li>Go to <b>Browser</b>, open the demo app, then select <b>Errors</b> (Errors Inbox).</li>
+            <li>Everyone who throws the same error lands in the same group, which is what makes <b>Users affected</b> climb. Errors you grouped show up under your custom label, such as <b class="js-group">Payment failures</b>.</li>
+            <li>Open an error group and search its profile for <code id="inboxFilter">demoCode = NR-XXXX</code> to find your own occurrences.</li>
+            <li>Open an error and look for its <b>session replay</b>. This app records replays for sessions that hit an error, so you can watch the clicks that led to it. Text is masked in replays for privacy.</li>
+          </ol>
+        </div>
+        <div class="find-step">2 · Query it</div>
+        <div class="find-card">
+          <h3>Your JavaScript errors</h3>
+          <ol>
+            <li>Open the query builder in New Relic.</li>
+            <li>Run this to see each error with its class and release.</li>
+          </ol>
+          <p class="expect"><b>You should see:</b> One row per error you sent, with its class (such as <code>TypeError</code> or <code>CheckoutError</code>) and the release you picked. Errors your handler ignored are missing on purpose.</p>
+          <pre id="nrqlErrors"></pre>
+          <div class="actions">
+            <button class="btn green small js-copy" data-copy-target="nrqlErrors" type="button">Copy NRQL</button>
+            <a class="btn ghost-dark small" data-entity="browserApp" href="https://one.newrelic.com" target="_blank" rel="noopener">Open New Relic <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="find-card">
+          <h3>Your ERROR logs</h3>
+          <ol>
+            <li>Same query builder, different event type.</li>
+            <li>Match <code>errorId</code> values to errors from the "Both" button.</li>
+          </ol>
+          <p class="expect"><b>You should see:</b> An ERROR log for each "Both" button you clicked, with an <code>errorId</code> that matches its error.</p>
+          <pre id="nrqlLogs"></pre>
+          <div class="actions">
+            <button class="btn green small js-copy" data-copy-target="nrqlLogs" type="button">Copy NRQL</button>
+          </div>
+        </div>
+      </div>
+      <div class="find-step tips-head">3 · Didn't see it?</div>
+      <div class="tips">
+        <div class="tip"><b>An error is missing?</b>Check your error handler rules. Ignored errors never leave the browser, which is exactly what makes ignoring noise cheap.</div>
+        <div class="tip"><b>Seeing errors you didn't throw?</b>Errors from browser extensions and third-party scripts show up too. That is what <code>setErrorHandler()</code> is for.</div>
+        <div class="tip"><b>Learn more</b><a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/noticeerror/" target="_blank" rel="noopener">noticeError()</a> · <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/seterrorhandler/" target="_blank" rel="noopener">setErrorHandler()</a> · <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/addrelease/" target="_blank" rel="noopener">addRelease()</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHECK ================= -->
+  <section class="step" id="check">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Check it / Your understanding</div>
+        <h2 class="display" style="margin-top:14px">Check yourself</h2>
+        <p class="muted">Pick an answer. A wrong pick can be retried.</p>
+      </div>
+      <p class="quiz-note">Each answer is recorded as a <code>DemoQuizAnswer</code> custom event, with your session code like everything else on this site, so we can see which questions trip people up. Only the option you pick is recorded.</p>
+      <div class="quiz">
+        <div class="q" data-qid="errors-ignored">
+          <p class="q-text">Your error handler ignores an error. Does New Relic still receive it?</p>
+          <div class="q-options"><button class="q-opt" type="button">Yes, marked as ignored in Errors Inbox</button><button class="q-opt" type="button" data-correct>No, it never leaves the browser</button><button class="q-opt" type="button">Only as an ERROR log</button></div>
+          <p class="q-feedback" hidden>Ignored errors are dropped in the browser, which is what makes ignoring noise cheap.</p>
+        </div>
+        <div class="q" data-qid="errors-users-affected">
+          <p class="q-text">Two visitors hit the same error. What lets Errors Inbox count them as two users affected?</p>
+          <div class="q-options"><button class="q-opt" type="button">The <code>demoCode</code> custom attribute</button><button class="q-opt" type="button"><code>addRelease()</code></button><button class="q-opt" type="button" data-correct><code>setUserId()</code>, which every page calls with your name</button></div>
+          <p class="q-feedback" hidden>Identical errors from every visitor group together, and <b>Users affected</b> counts the distinct end users in the group.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>Demo.upNext()</script>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>A sample page for exploring New Relic browser error tracking.</span>
+    <span>Avoid typing anything sensitive. Errors are visible to everyone in the shared account.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ================= LOGIC (pure functions, tested by backend/page-logic.test.js) ================= -->
+<script>
+/*LOGIC-START*/
+(function (root) {
+  function contains(haystack, needle) {
+    var n = String(needle || '').trim().toLowerCase();
+    return n !== '' && String(haystack || '').toLowerCase().indexOf(n) > -1;
+  }
+
+  // Same decision the setErrorHandler callback makes. Ignore wins over group.
+  function decideError(message, rules) {
+    if (rules.ignoreEnabled && contains(message, rules.ignoreText)) return { action: 'ignore' };
+    var label = String(rules.groupLabel || '').trim();
+    // An empty group label would make New Relic ignore the error, so never return one.
+    if (rules.groupEnabled && label && contains(message, rules.groupText)) return { action: 'group', group: label };
+    return { action: 'report' };
+  }
+
+  // Translate a decision into what setErrorHandler expects back.
+  function handlerResult(decision) {
+    if (decision.action === 'ignore') return true;
+    if (decision.action === 'group') return { group: decision.group };
+    return false;
+  }
+
+  function eventTypes(method) {
+    if (method === 'console.error') return ['Log'];
+    if (method === 'both') return ['JavaScriptError', 'Log'];
+    return ['JavaScriptError'];
+  }
+
+  function buildErrorsNrql(code) {
+    return "SELECT timestamp, errorClass, errorMessage, releaseIds, demoUser\n" +
+           "FROM JavaScriptError\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago LIMIT 100";
+  }
+  function buildLogsNrql(code) {
+    return "SELECT timestamp, level, message, errorId\n" +
+           "FROM Log\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago LIMIT 100";
+  }
+
+  root.ErrDemo = {
+    decideError: decideError, handlerResult: handlerResult, eventTypes: eventTypes,
+    buildErrorsNrql: buildErrorsNrql, buildLogsNrql: buildLogsNrql
+  };
+})(window);
+/*LOGIC-END*/
+</script>
+
+<!-- ================= UI ================= -->
+<script>
+(function () {
+  'use strict';
+
+  var L = window.ErrDemo;
+  var RELEASE_NAME = 'checkout';
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = window.DemoIdentity.current();
+  var state = { name: ID.name, code: ID.code, release: '2.4.1', handlerInstalled: false,
+                stats: { errors: 0, logs: 0, grouped: 0, ignored: 0, unsent: 0 } };
+  var demo; // set by Demo.start() in init()
+
+  // This page checks for noticeError(), the call every error method here relies on.
+  function agent() { var nr = window.newrelic; return (nr && typeof nr.noticeError === 'function') ? nr : null; }
+  var safe = Demo.safe, esc = Demo.esc, toast = Demo.toast;
+  function userName() { return state.name || 'anonymous'; }
+  function rid(prefix) { return prefix + '-' + Math.random().toString(36).slice(2, 7).toUpperCase(); }
+  function baseAttrs() { return { demoUser: userName(), demoCode: state.code }; }
+
+  // Custom error class so "ValidationError" and "CheckoutError" show up as real error classes.
+  function namedError(name, message) {
+    var e = new Error(message);
+    e.name = name;
+    return e;
+  }
+
+  // ---- Agent + identity ----------------------------------------------
+  // Runs after every name, code or release change (Demo.start sets the custom attributes).
+  function onIdentity(nr) {
+    if (nr && typeof nr.addRelease === 'function') safe(function () { nr.addRelease(RELEASE_NAME, state.release); });
+    $('nrqlErrors').textContent = L.buildErrorsNrql(state.code);
+    $('nrqlLogs').textContent = L.buildLogsNrql(state.code);
+    $('inboxFilter').textContent = 'demoCode = ' + state.code;
+    renderNoticePreview();
+  }
+
+  // ---- Error handler ---------------------------------------------------
+  function rules() {
+    return {
+      ignoreEnabled: $('ignoreEnabled').checked, ignoreText: $('ignoreText').value,
+      groupEnabled: $('groupEnabled').checked, groupText: $('groupText').value, groupLabel: $('groupLabel').value
+    };
+  }
+  function renderRules() {
+    $('ruleIgnore').classList.toggle('off', !$('ignoreEnabled').checked);
+    $('ruleGroup').classList.toggle('off', !$('groupEnabled').checked);
+    var label = $('groupLabel').value.trim() || 'your label';
+    Array.prototype.forEach.call(document.querySelectorAll('.js-group'), function (el) { el.textContent = label; });
+  }
+  function installHandler() {
+    var nr = agent();
+    if (state.handlerInstalled || !nr || typeof nr.setErrorHandler !== 'function') return;
+    safe(function () {
+      nr.setErrorHandler(function (err) {
+        var msg = err && (err.message !== undefined ? err.message : err);
+        return L.handlerResult(L.decideError(msg, rules()));
+      });
+    });
+    state.handlerInstalled = true;
+  }
+
+  // ---- Feed -------------------------------------------------------------
+  function record(opts) {
+    // opts: { via, method, errorClass, message, attrs }
+    var sent = !!agent();
+    var types = L.eventTypes(opts.method);
+    var hasError = types.indexOf('JavaScriptError') > -1;
+    var decision = hasError ? L.decideError(opts.message, rules()) : { action: 'report' };
+    var status, label;
+    if (!sent) { status = 'unsent'; label = 'Not sent'; state.stats.unsent++; }
+    else if (decision.action === 'ignore') { status = 'ignored'; label = 'Ignored by handler'; state.stats.ignored++; }
+    else if (decision.action === 'group') { status = 'grouped'; label = 'Grouped: ' + decision.group; state.stats.grouped++; }
+    else { status = 'reported'; label = hasError ? 'Reported' : 'Logged'; }
+    if (sent) {
+      if (hasError && decision.action !== 'ignore') state.stats.errors++;
+      if (types.indexOf('Log') > -1) state.stats.logs++;
+    }
+
+    var t = Demo.time();
+    var attrs = opts.attrs && Object.keys(opts.attrs).length ? JSON.stringify(opts.attrs) : '';
+    var typeChips = types.map(function (ty) {
+      var dropped = ty === 'JavaScriptError' && decision.action === 'ignore';
+      return '<span class="chip ' + (dropped ? 'dropped' : (ty === 'Log' ? 'log' : 'jse')) + '">' + ty + '</span>';
+    }).join('');
+    Demo.feed.add(
+      '<div class="line1"><span>' + t + '</span><span class="via">' + esc(opts.via) + '</span>' +
+      (opts.errorClass ? '<span class="chip cls">' + esc(opts.errorClass) + '</span>' : '') + '</div>' +
+      '<div class="msg">' + esc(opts.message) + '</div>' +
+      (attrs ? '<div class="attrs">' + esc(attrs) + '</div>' : '') +
+      '<div class="line2">' + typeChips + '<span class="status ' + status + '">' + esc(label) + '</span></div>', 200);
+    renderStats();
+    toast(opts.via + ' · ' + label);
+  }
+  function renderStats() {
+    var s = state.stats;
+    $('statErrors').textContent = s.errors; $('statLogs').textContent = s.logs;
+    $('statGrouped').textContent = s.grouped; $('statIgnored').textContent = s.ignored;
+    $('statUnsent').textContent = s.unsent; $('statUnsentWrap').hidden = s.unsent === 0;
+  }
+  function clearFeed() {
+    state.stats = { errors: 0, logs: 0, grouped: 0, ignored: 0, unsent: 0 };
+    Demo.feed.clear('Feed cleared. Errors already sent stay in New Relic.');
+    renderStats();
+  }
+
+  // ---- Method 1: uncaught ---------------------------------------------
+  // Each maker produces a genuine error by actually doing the broken thing.
+  function capture(fn) { try { fn(); } catch (e) { return e; } return new Error('Expected an error'); }
+  var AUTO = [
+    { id: 'type', label: 'TypeError', hint: 'Read a property of undefined',
+      make: function () { return capture(function () { var cart; return cart.total.toFixed(2); }); } },
+    { id: 'ref', label: 'ReferenceError', hint: 'Call a function that does not exist',
+      make: function () { return capture(function () { /* global calculateShipping */ return calculateShipping(); }); } },
+    { id: 'range', label: 'RangeError', hint: 'Create an array with length -1',
+      make: function () { return capture(function () { return new Array(-1); }); } },
+    { id: 'syntax', label: 'SyntaxError', hint: 'Parse broken JSON from an API',
+      make: function () { return capture(function () { return JSON.parse('{"cart": '); }); } },
+    { id: 'custom', label: 'CheckoutError', hint: 'Throw your own error class',
+      make: function () { return namedError('CheckoutError', 'Order total does not match line items'); } },
+    { id: 'promise', label: 'Unhandled rejection', hint: 'A promise rejects with no .catch()', rejection: true,
+      make: function () { return new Error('Failed to load recommendations'); } },
+    { id: 'timer', label: 'Error in setTimeout', hint: 'Async code fails later',
+      make: function () { return capture(function () { var user = null; return user.preferences; }); } }
+  ];
+  function throwUncaught(err, via) {
+    record({ via: via || 'uncaught', method: 'uncaught', errorClass: err.name, message: err.message, attrs: null });
+    setTimeout(function () { throw err; }, 0);
+  }
+  function rejectUnhandled(err, via) {
+    record({ via: via || 'unhandledrejection', method: 'rejection', errorClass: err.name, message: err.message, attrs: null });
+    Promise.reject(err); // intentionally no .catch()
+  }
+  function fireAuto(item) {
+    var err = item.make();
+    if (item.rejection) rejectUnhandled(err);
+    else if (item.id === 'timer') {
+      record({ via: 'setTimeout', method: 'uncaught', errorClass: err.name, message: err.message, attrs: null });
+      setTimeout(function () { throw err; }, 300);
+    } else throwUncaught(err);
+  }
+
+  // ---- Method 2: noticeError ------------------------------------------
+  function buildNotice() {
+    var type = $('noticeType').value;
+    var msg = $('noticeMsg').value || '(empty message)';
+    var attrs = baseAttrs();
+    var k = $('attrKey').value.trim().replace(/[^\w.\-]/g, '');
+    if (k) attrs[k] = $('attrVal').value;
+    return { type: type, message: msg, attrs: attrs };
+  }
+  function makeTyped(type, message) {
+    if (type === 'TypeError') return new TypeError(message);
+    if (type === 'Error') return new Error(message);
+    return namedError(type, message);
+  }
+  function notice(err, attrs, via) {
+    var nr = agent();
+    if (nr) safe(function () { nr.noticeError(err, attrs); });
+    record({ via: via || 'noticeError', method: 'noticeError', errorClass: err.name, message: err.message, attrs: attrs });
+  }
+  function renderNoticePreview() {
+    var c = buildNotice();
+    var ctor = c.type === 'ValidationError' ? 'ValidationError' : c.type;
+    var attrLines = Object.keys(c.attrs).map(function (k) {
+      return '    ' + esc(k) + ': <span class="s">' + esc(JSON.stringify(c.attrs[k])) + '</span>';
+    }).join(',\n');
+    $('noticePreview').innerHTML =
+      '<span class="k">try</span> {\n  <span class="k">throw new</span> ' + ctor + '(<span class="s">' + esc(JSON.stringify(c.message)) + '</span>)\n' +
+      '} <span class="k">catch</span> (err) {\n  showFriendlyMessage()\n  newrelic.<span class="k">noticeError</span>(err, {\n' + attrLines + '\n  })\n}';
+  }
+
+  // ---- Method 3: handler test buttons ---------------------------------
+  var HANDLER_TESTS = [
+    { label: 'Throw ResizeObserver noise', hint: 'Matches the ignore rule',
+      run: function () { throwUncaught(new Error('ResizeObserver loop completed with undelivered notifications.'), 'uncaught'); } },
+    { label: 'Throw a payment error', hint: 'Matches the group rule',
+      run: function () { throwUncaught(namedError('PaymentError', 'Payment authorization timed out'), 'uncaught'); } }
+  ];
+
+  // ---- Errors vs logs ---------------------------------------------------
+  // Uses newrelic.log only. Adding console.error too would create a second, duplicate Log.
+  function sendErrorLog(message, attrs, via) {
+    var nr = agent();
+    if (nr && typeof nr.log === 'function') safe(function () { nr.log(message, { level: 'error', customAttributes: attrs }); });
+    record({ via: via || 'newrelic.log', method: 'console.error', errorClass: '', message: message, attrs: attrs });
+  }
+  var VS = [
+    { label: 'console.error only', hint: 'Creates a Log', types: ['Log'],
+      run: function (text) { var m = text; console.error(m); record({ via: 'console.error', method: 'console.error', message: m, attrs: null }); } },
+    { label: 'noticeError only', hint: 'Creates a JavaScriptError', types: ['JavaScriptError'],
+      run: function (text) { notice(new Error(text), baseAttrs()); } },
+    { label: 'Both, linked', hint: 'Recommended: shared errorId', types: ['JavaScriptError', 'Log'], recommended: true,
+      run: function (text) {
+        var id = rid('ERR');
+        var err = new Error(text);
+        var attrs = Object.assign(baseAttrs(), { errorId: id });
+        var nr = agent();
+        if (nr) {
+          safe(function () { nr.noticeError(err, attrs); });
+          if (typeof nr.log === 'function') safe(function () { nr.log(err.message + ' (user saw a retry prompt)', { level: 'error', customAttributes: attrs }); });
+        }
+        record({ via: 'noticeError + log', method: 'both', errorClass: err.name, message: err.message, attrs: attrs });
+      } }
+  ];
+
+  // ---- Scenarios ---------------------------------------------------------
+  var SCENARIOS = [
+    { id: 'widget', title: 'Checkout widget crash', blurb: 'A payment widget reads data that never loaded.', chips: ['TypeError', 'Log'],
+      steps: [
+        function () { sendErrorLog('Payment widget rendered before cart loaded', Object.assign(baseAttrs(), { component: 'PaymentWidget', scenario: 'widget' })); },
+        function () { throwUncaught(capture(function () { var cart; return cart.total; }), 'uncaught'); }
+      ] },
+    { id: 'api', title: 'Payment API 500, handled', blurb: 'The app shows a retry button and reports it.', chips: ['Error', 'grouped'],
+      steps: [
+        function () {
+          var id = rid('ERR');
+          var attrs = Object.assign(baseAttrs(), { endpoint: '/api/payment', httpStatus: 500, errorId: id, scenario: 'api' });
+          notice(new Error('Payment API returned 500'), attrs);
+        }
+      ] },
+    { id: 'noise', title: 'Third-party noise', blurb: 'A layout library spams a harmless error.', chips: ['Error', 'ignored'],
+      steps: [
+        function () { throwUncaught(new Error('ResizeObserver loop completed with undelivered notifications.'), 'uncaught'); },
+        function () { throwUncaught(new Error('ResizeObserver loop limit exceeded'), 'uncaught'); }
+      ] },
+    { id: 'fetch', title: 'Recommendations fetch fails', blurb: 'A background request rejects and nobody catches it.', chips: ['Rejection', 'Log'],
+      steps: [
+        function () { sendErrorLog('GET /api/recommendations failed after 3 retries', Object.assign(baseAttrs(), { endpoint: '/api/recommendations', retries: 3, scenario: 'fetch' })); },
+        function () { rejectUnhandled(new Error('Failed to fetch recommendations: NetworkError')); }
+      ] }
+  ];
+  function runScenario(sc, btn) {
+    if (btn.classList.contains('running')) return;
+    btn.classList.add('running'); btn.setAttribute('aria-busy', 'true');
+    sc.steps.forEach(function (step, i) {
+      setTimeout(function () {
+        step();
+        if (i === sc.steps.length - 1) { btn.classList.remove('running'); btn.removeAttribute('aria-busy'); }
+      }, i * 500);
+    });
+  }
+
+  // ---- Build buttons -------------------------------------------------------
+  function errBtn(label, hint, chips, extraClass) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'err-btn' + (extraClass ? ' ' + extraClass : '');
+    b.innerHTML = esc(label) + '<small>' + esc(hint) + '</small>' +
+      (chips ? '<span class="meta">' + chips.map(function (c) { return '<span class="chip ' + (c === 'Log' ? 'log' : 'jse') + '">' + c + '</span>'; }).join('') + '</span>' : '');
+    return b;
+  }
+  function buildButtons() {
+    AUTO.forEach(function (item) {
+      var b = errBtn(item.label, item.hint, null);
+      b.addEventListener('click', function () { fireAuto(item); });
+      $('autoButtons').appendChild(b);
+    });
+    HANDLER_TESTS.forEach(function (item) {
+      var b = errBtn(item.label, item.hint, null);
+      b.addEventListener('click', item.run);
+      $('handlerButtons').appendChild(b);
+    });
+    VS.forEach(function (item) {
+      var b = errBtn(item.label, item.hint, item.types, item.recommended ? 'recommended' : '');
+      b.addEventListener('click', function () { item.run($('vsMsg').value || '(empty message)'); });
+      $('vsButtons').appendChild(b);
+    });
+    SCENARIOS.forEach(function (sc) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'scenario';
+      b.innerHTML = '<b>' + esc(sc.title) + '</b><span class="blurb">' + esc(sc.blurb) + '</span><span class="meta">' +
+        sc.chips.map(function (c) { return '<span class="chip ' + (c === 'Log' ? 'log' : (c === 'grouped' || c === 'ignored' ? 'cls' : 'jse')) + '">' + c + '</span>'; }).join('') + '</span>';
+      b.addEventListener('click', function () { runScenario(sc, b); });
+      $('scenarioButtons').appendChild(b);
+    });
+  }
+
+  // ---- Init ----------------------------------------------------------------
+  function init() {
+    buildButtons();
+    $('release').addEventListener('change', function (e) { state.release = e.target.value; demo.apply(); });
+    ['noticeMsg', 'noticeType', 'attrKey', 'attrVal'].forEach(function (id) {
+      $(id).addEventListener('input', renderNoticePreview); $(id).addEventListener('change', renderNoticePreview);
+    });
+    $('noticeSend').addEventListener('click', function () {
+      var c = buildNotice();
+      var err = capture(function () { throw makeTyped(c.type, c.message); });
+      notice(err, c.attrs);
+    });
+    ['ignoreEnabled', 'ignoreText', 'groupEnabled', 'groupText', 'groupLabel'].forEach(function (id) {
+      $(id).addEventListener('input', renderRules); $(id).addEventListener('change', renderRules);
+    });
+    $('clearFeed').addEventListener('click', clearFeed);
+
+    renderRules();
+    installHandler();
+    demo = Demo.start({ state: state, onIdentity: onIdentity, onAgent: installHandler });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

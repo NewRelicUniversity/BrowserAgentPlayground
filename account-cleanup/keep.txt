@@ -1,0 +1,24 @@
+# Items the cleanup never deletes, one per line, matched against the item's name.
+# Case doesn't matter; * matches anything and ? one character. An exact ID or GUID works too.
+# Anything with "DO NOT DELETE" (or "DONOTDELETE") in its name is always kept and needn't be listed.
+# Only items created by the cleanup's owner (demo@newrelicuniversity.com) are ever considered.
+
+# Agent Playground: this site's dashboards, monitors, alerts, service levels and workload, created by
+# newrelic/setup.sh (some of them as demo@). All their names start with "Agent Playground".
+Agent Playground*
+Agent Playground API - Latency
+Agent Playground API - Success
+Agent Playground Browser - Latency (LCP)
+Agent Playground Browser - Availability (AJAX)
+
+# Alert conditions whose names don't carry the "Agent Playground" prefix (their policies do, and are kept
+# by the glob above). Created by newrelic/synthetics.sh and newrelic/alerts.sh.
+A synthetic check failed
+Host memory nearly full
+
+# Instructors' notification destinations, last edited through the demo@ login
+Dan Johnson
+demo@newrelicuniversity.com - Mobile Push
+
+# The demo@ copy of the Cosmic Coffee workload (Dan has his own)
+Cosmic Coffee Cluster

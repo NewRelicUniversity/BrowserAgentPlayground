@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ===================================================================
+     NEW RELIC BROWSER SNIPPET
+     Same snippet as index.html. Rage click, dead click and error click
+     detection all come from the generic_events feature (user_actions),
+     which defaults to on for the Pro and Pro+SPA agent. Nothing in
+     this snippet turns it on.
+     =================================================================== -->
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="demo-identity.js"></script>
+<script src="site.js"></script>
+<script src="nr-init.js"></script>
+<!-- NR:SNIPPET -->
+<script src="nr-config.js"></script>
+<script src="nr-agent.js"></script>
+<!-- /NR:SNIPPET -->
+
+<title>Browser Frustration Demo | New Relic</title>
+<link rel="icon" href="favicons/favicon.ico" sizes="48x48">
+<link rel="icon" href="favicons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="favicons/apple-touch-icon.png" sizes="180x180">
+<meta name="theme-color" content="#080F11">
+<meta name="description" content="Try New Relic's rage click, dead click and error click detection: trigger each frustration signal on purpose, then find your own UserAction events in a shared account.">
+<!-- Link previews (Slack, email, social). The image URL is absolute, so it works from any host. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Browser Agent Playground">
+<meta property="og:title" content="Browser Frustration Demo | New Relic">
+<meta property="og:description" content="Try New Relic's rage click, dead click and error click detection: trigger each frustration signal on purpose, then find your own UserAction events in a shared account.">
+<meta property="og:image" content="https://mcaronnewrelic.github.io/BrowserAgentPlayground/images/vitals-hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* ---------- Playground ---------- */
+  .card .field label, .card .field .label { color: var(--black); }
+
+  /* ---------- Feed ---------- */
+  .status.reported { background: rgba(28,231,131,.16); color: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <span>Rage, dead and error clicks are part of the Pro and Pro+SPA browser agent's frustration signals.</span>
+    <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-pro-features/user-impact/" target="_blank" rel="noopener">Read the docs</a>
+  </div>
+</div>
+
+<script>Demo.header()</script>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">New Relic frustration signals</div>
+        <h1 class="display" style="margin-top:18px">Click until<br>it hurts.</h1>
+        <p class="lede">Mash a button, click into the void, or break on click. The browser agent turns each into a signal: rage click, dead click, error click. Trigger all three, then find them in a shared account.</p>
+        <div class="ctas">
+          <a class="btn" href="#try">Start clicking <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="btn secondary" href="#find">Jump to the query</a>
+        </div>
+        <div class="note">
+          <span class="chip" aria-hidden="true">UserAction</span>
+          <span>All three signals land as the same event type with a boolean flag: <code>rageClick</code>, <code>deadClick</code>, <code>errorClick</code>. It's automatic: <code>user_actions.enabled</code> defaults to <code>true</code> on the Pro and Pro+SPA agent, so no snippet change was needed for this page.</span>
+        </div>
+      </div>
+      <div class="term" aria-label="How each signal fires">
+        <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c">// Rage click: 4+ clicks, same element, under 1s</span>
+button.click() <span class="c">// x4, fast</span>
+<span class="c">// -&gt; rageClick: true</span>
+
+<span class="c">// Dead click: a button/link click, then 2s of nothing</span>
+<span class="k">function</span> onSubmit() { <span class="c">/* ...nothing visible happens... */</span> }
+<span class="c">// -&gt; deadClick: true</span>
+
+<span class="c">// Error click: a click, then an error inside that 2s</span>
+newrelic.<span class="k">noticeError</span>(err)
+<span class="c">// -&gt; errorClick: true</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WHO ================= -->
+  <section class="who-bar">
+    <div class="wrap">
+      <details class="who" id="who">
+        <script>Demo.whoSummary()</script>
+        <div class="who-body">
+          <p class="muted">Everyone shares one New Relic account, so your clicks are tagged as <code>demoUser</code> and <code>demoCode</code> custom attributes (your name is also set as your end-user ID via <code>setUserId()</code>), carried onto every <code>UserAction</code> event you generate below.</p>
+          <script>Demo.identityForm()</script>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ================= TRY IT ================= -->
+  <section class="step" id="try">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Try it / Trigger a signal</div>
+        <h2 class="display" style="margin-top:14px">Click like you mean it</h2>
+        <p class="muted">Each card below is wired to trip exactly one signal. The agent decides what counts, and this page has no way to read its verdict back, so the activity feed on the right only shows what you did locally. Give it a minute or two, then check the queries below for what New Relic actually recorded.</p>
+      </div>
+
+      <div class="primer">
+        <div>
+          <div class="tag-row"><div class="tag">You'll learn to</div><span class="chip auto">Automatic, no code</span></div>
+          <ul><li>Trigger and recognize rage clicks, dead clicks and error clicks.</li><li>Know the timing that trips each signal.</li><li>Find your clicks in <code>UserAction</code> events and the frustration views.</li></ul>
+        </div>
+        <div>
+          <div class="tag-row"><div class="tag">Before you start</div></div>
+          <ul class="needs"><li><span class="chip where-default">On by default</span><span><code>init.user_actions.enabled</code> is on by default in the Pro and Pro+SPA agent.</span></li></ul>
+        </div>
+      </div>
+
+      <div class="playground">
+        <div class="cards">
+
+          <article class="card wide" aria-labelledby="howTitle">
+            <div class="tag">How the agent decides</div>
+            <h3 id="howTitle">Three ways a click says something's wrong</h3>
+            <p>This runs automatically. Nothing on this page tells the agent what counts. It's on by default on the Pro and Pro+SPA browser agent (<code>init.user_actions.enabled</code>), watching every click on every page.</p>
+            <p><b>Rage click</b>: the same element gets 4 or more clicks, and the first and the fourth land under a second apart.</p>
+            <p><b>Dead click</b>: a click on a button or link, then 2 seconds in which nothing on the page changes: no DOM update, no request, no navigation.</p>
+            <p><b>Error click</b>: a click on a button or link, then a JavaScript error inside that same 2-second window, thrown or reported with <code>noticeError()</code>.</p>
+          </article>
+
+          <article class="card" aria-labelledby="rageTitle">
+            <div class="tag">1 · Rage click</div>
+            <h3 id="rageTitle">Click like it's broken</h3>
+            <p>Click the button below 4 or more times, fast, all within about a second.</p>
+            <button id="rageBtn" class="btn" type="button">Submit</button>
+            <p id="rageNote" aria-live="polite">0 clicks in the last second.</p>
+          </article>
+
+          <article class="card" aria-labelledby="deadTitle">
+            <div class="tag">2 · Dead click</div>
+            <h3 id="deadTitle">Click into the void</h3>
+            <p>Click the button below and wait. It won't do anything for 2 seconds. That's the point. Wait a few seconds after the page loads first, so this page's own background checks don't count as "something happening."</p>
+            <button id="deadBtn" class="btn secondary" type="button">Submit</button>
+            <p id="deadNote" hidden>Still nothing, 2.3 seconds later. That silence is what the agent calls a dead click.</p>
+          </article>
+
+          <article class="card" aria-labelledby="errorTitle">
+            <div class="tag">3 · Error click</div>
+            <h3 id="errorTitle">Click, then break</h3>
+            <p>Click the button below. It reports a handled error with <code>newrelic.noticeError()</code> right after, the same signal an uncaught error would send.</p>
+            <button id="errorBtn" class="btn" type="button">Submit</button>
+            <p id="errorStatus">Nothing sent yet.</p>
+          </article>
+
+        </div>
+
+        <aside class="feed" aria-labelledby="feedTitle">
+          <div class="feed-head">
+            <div class="top">
+              <h3 id="feedTitle">Click activity</h3>
+              <button id="clearFeed" class="btn ghost-dark small" type="button">Clear</button>
+            </div>
+            <div class="feed-stats" aria-live="polite">
+              <span><b id="statClicks">0</b> clicks</span>
+              <span><b id="statRage">0</b> on rage</span>
+              <span><b id="statDead">0</b> on dead</span>
+              <span><b id="statErrorClick">0</b> on error</span>
+            </div>
+          </div>
+          <ul class="feed-list" id="feed">
+            <li class="feed-empty" id="feedEmpty">Nothing yet. Click one of the buttons to the left.</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FIND IT ================= -->
+  <section class="step find" id="find">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Find it / In New Relic</div>
+        <h2 class="display" style="margin-top:14px">Find your clicks</h2>
+        <p>Data arrives in batches, usually within a minute (<a href="install.html#timing">why</a>). Everything below is already filled in with your code, <code class="js-code" style="color:var(--green)">NR-XXXX</code>.</p>
+      </div>
+      <div class="find-grid">
+        <div class="find-step">1 · See it in New Relic</div>
+        <div class="find-card full">
+          <h3>In the Browser UI</h3>
+          <ol>
+            <li>Go to <b>Browser</b>, open the demo app, then <b>Users → User impact → Frustration metrics</b> for the aggregate view: rage click trends, top affected pages and elements.</li>
+            <li>Filter any of the above by <code id="uiFilter">demoCode = NR-XXXX</code> to see only your clicks.</li>
+            <li>Session Replay is already on for this app. Open a session that includes one of your clicks and watch it happen.</li>
+          </ol>
+        </div>
+        <div class="find-step">2 · Query it</div>
+        <div class="find-card full">
+          <h3>All your clicks</h3>
+          <ol>
+            <li>Open the query builder in New Relic and run this. <code>rageClick</code>, <code>deadClick</code> and <code>errorClick</code> are booleans: <code>true</code> only when that signal fired.</li>
+            <li>Everything else about the click (which element, how many times, how long) is on the same row.</li>
+          </ol>
+          <p class="expect"><b>You should see:</b> One row per click. <code>rageClick</code>, <code>deadClick</code> or <code>errorClick</code> is true on the clicks that tripped a signal.</p>
+          <pre id="nrqlAll"></pre>
+          <div class="actions">
+            <button class="btn green small js-copy" data-copy-target="nrqlAll" type="button">Copy NRQL</button>
+            <a class="btn ghost-dark small" data-entity="browserApp" href="https://one.newrelic.com" target="_blank" rel="noopener">Open New Relic <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="find-card">
+          <h3>Just your rage clicks</h3>
+          <p class="expect"><b>You should see:</b> A row for each burst of four or more fast clicks, with its <code>actionCount</code>.</p>
+          <pre id="nrqlRage"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlRage" type="button">Copy NRQL</button></div>
+        </div>
+        <div class="find-card">
+          <h3>Just your dead clicks</h3>
+          <p class="expect"><b>You should see:</b> A row for each click that changed nothing on the page.</p>
+          <pre id="nrqlDead"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlDead" type="button">Copy NRQL</button></div>
+        </div>
+        <div class="find-card">
+          <h3>Just your error clicks</h3>
+          <p class="expect"><b>You should see:</b> A row for each click followed by a JavaScript error.</p>
+          <pre id="nrqlErrorClick"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlErrorClick" type="button">Copy NRQL</button></div>
+        </div>
+      </div>
+      <div class="find-step tips-head">3 · Didn't see it?</div>
+      <div class="tips">
+        <div class="tip"><b>Not seeing a rage click?</b>All 4+ clicks need to land within one second of each other. Click faster, or get a friend to help.</div>
+        <div class="tip"><b>Not seeing a dead click?</b>Any DOM change counts as "something happened," including this page's own background checks right after load. Wait a few seconds, then try again.</div>
+        <div class="tip"><b>Learn more</b><a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-pro-features/user-impact/" target="_blank" rel="noopener">User impact: frustration signals</a> · <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/noticeerror/" target="_blank" rel="noopener">noticeError()</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHECK ================= -->
+  <section class="step" id="check">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Check it / Your understanding</div>
+        <h2 class="display" style="margin-top:14px">Check yourself</h2>
+        <p class="muted">Pick an answer. A wrong pick can be retried.</p>
+      </div>
+      <p class="quiz-note">Each answer is recorded as a <code>DemoQuizAnswer</code> custom event, with your session code like everything else on this site, so we can see which questions trip people up. Only the option you pick is recorded.</p>
+      <div class="quiz">
+        <div class="q" data-qid="frustration-rage">
+          <p class="q-text">You clicked a button three times quickly. Is that a rage click?</p>
+          <div class="q-options"><button class="q-opt" type="button">Yes, any repeated clicking counts</button><button class="q-opt" type="button" data-correct>No, it takes four or more clicks within one second</button><button class="q-opt" type="button">Only if the button is disabled</button></div>
+          <p class="q-feedback" hidden>Rage clicks need at least four clicks, all within one second of each other.</p>
+        </div>
+        <div class="q" data-qid="frustration-dead">
+          <p class="q-text">What makes a click a dead click?</p>
+          <div class="q-options"><button class="q-opt" type="button" data-correct>Nothing on the page changes after it</button><button class="q-opt" type="button">It lands on a disabled button</button><button class="q-opt" type="button">It throws a JavaScript error</button></div>
+          <p class="q-feedback" hidden>Any DOM change counts as something happening. A click that throws an error is an error click instead.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>Demo.upNext()</script>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>A sample page for exploring New Relic's rage click, dead click and error click detection.</span>
+    <span>Avoid typing anything sensitive. Data is visible to everyone in the shared account.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ================= LOGIC (pure functions, tested by backend/page-logic.test.js) ================= -->
+<script>
+/*LOGIC-START*/
+(function (root) {
+  // Count how many of the given click timestamps (ms) fall within the agent's rage-click window.
+  function rageWindowCount(timestamps, now, windowMs) {
+    return timestamps.filter(function (t) { return now - t < windowMs; }).length;
+  }
+
+  function buildUserActionNrql(code) {
+    return "SELECT timestamp, action, actionCount, actionDuration, rageClick, deadClick, errorClick, target, targetTag, targetId\n" +
+           "FROM UserAction\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago\n" +
+           "LIMIT 100";
+  }
+  // field: 'rageClick' | 'deadClick' | 'errorClick'
+  function buildSignalNrql(code, field) {
+    return "SELECT timestamp, actionCount, actionDuration, target, targetTag, targetId\n" +
+           "FROM UserAction\n" +
+           "WHERE demoCode = '" + code + "' AND " + field + " = true\n" +
+           "SINCE 1 hour ago\n" +
+           "LIMIT 100";
+  }
+
+  root.ClickDemo = {
+    rageWindowCount: rageWindowCount,
+    buildUserActionNrql: buildUserActionNrql, buildSignalNrql: buildSignalNrql
+  };
+})(window);
+/*LOGIC-END*/
+</script>
+
+<!-- ================= UI ================= -->
+<script>
+(function () {
+  'use strict';
+
+  var L = window.ClickDemo;
+  var RAGE_WINDOW_MS = 1000;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = window.DemoIdentity.current();
+  var state = { name: ID.name, code: ID.code, stats: { clicks: 0, rage: 0, dead: 0, error: 0 } };
+
+  var agent = Demo.agent, safe = Demo.safe, esc = Demo.esc, toast = Demo.toast;
+  function userName() { return state.name || 'anonymous'; }
+
+  // ---- Agent + identity ------------------------------------------------
+  // Runs after every name or code change (Demo.start sets the custom attributes): refreshes this page's queries.
+  function onIdentity() {
+    $('nrqlAll').textContent = L.buildUserActionNrql(state.code);
+    $('nrqlRage').textContent = L.buildSignalNrql(state.code, 'rageClick');
+    $('nrqlDead').textContent = L.buildSignalNrql(state.code, 'deadClick');
+    $('nrqlErrorClick').textContent = L.buildSignalNrql(state.code, 'errorClick');
+    $('uiFilter').textContent = 'demoCode = ' + state.code;
+  }
+
+  // ---- Feed --------------------------------------------------------------
+  function record(via, detail) {
+    var t = Demo.time();
+    Demo.feed.add('<div class="line1"><span>' + t + '</span><span class="via">' + esc(via) + '</span></div>' +
+      '<div class="msg">' + esc(detail) + '</div>');
+    renderStats();
+  }
+  function renderStats() {
+    var s = state.stats;
+    $('statClicks').textContent = s.clicks; $('statRage').textContent = s.rage;
+    $('statDead').textContent = s.dead; $('statErrorClick').textContent = s.error;
+  }
+  function clearFeed() {
+    state.stats = { clicks: 0, rage: 0, dead: 0, error: 0 };
+    $('feed').innerHTML = '<li class="feed-empty" id="feedEmpty">Feed cleared. Clicks already sent stay in New Relic.</li>';
+    renderStats();
+  }
+
+  // ---- 1. Rage click -------------------------------------------------------
+  // Mirrors the agent's own window locally just to narrate it. The agent makes its own
+  // independent decision server-side, this is not a readout of that decision.
+  var rageClicks = [];
+  function onRageClick() {
+    state.stats.clicks++; state.stats.rage++;
+    var now = Date.now();
+    rageClicks.push(now);
+    rageClicks = rageClicks.filter(function (t) { return now - t < RAGE_WINDOW_MS; });
+    var count = L.rageWindowCount(rageClicks, now, RAGE_WINDOW_MS);
+    var tripped = count >= 4;
+    $('rageNote').textContent = tripped
+      ? count + ' clicks in the last second. That is a rage click.'
+      : count + ' click' + (count === 1 ? '' : 's') + ' in the last second. Keep going.';
+    record('rage click button', count + ' clicks in the last second' + (tripped ? ' (threshold met)' : ''));
+    toast(tripped ? 'Rage click: ' + count + ' in under a second' : count + ' click(s) so far');
+  }
+
+  // ---- 2. Dead click ---------------------------------------------------------
+  // Critical: do nothing to the DOM here. Any mutation anywhere on the page (even
+  // logging this click to the feed) cancels the agent's dead-click timer before it
+  // can fire. So the reveal (and the feed entry for it) waits until just past the
+  // agent's own 2000ms window.
+  var deadTimer;
+  function onDeadClick() {
+    clearTimeout(deadTimer); // a JS timer, not a DOM node, safe to touch
+    deadTimer = setTimeout(function () {
+      state.stats.clicks++; state.stats.dead++;
+      $('deadNote').hidden = false;
+      record('dead click button', 'Still nothing, 2.3s later. That silence is what the agent calls a dead click.');
+      toast('Still nothing, that is the dead click');
+    }, 2300);
+  }
+
+  // ---- 3. Error click ---------------------------------------------------------
+  // DOM updates here are fine; only dead-click evaluation cares about mutations.
+  function onErrorClick() {
+    state.stats.clicks++; state.stats.error++;
+    var nr = agent();
+    $('errorStatus').textContent = nr ? 'Reported a handled error just now.' : 'No agent detected. Nothing was sent.';
+    if (nr && typeof nr.noticeError === 'function') {
+      safe(function () { nr.noticeError(new Error('Simulated error click'),{ demoUser: userName(), demoCode: state.code }); });
+    }
+    record('error click button', nr ? 'noticeError() called' : 'noticeError() skipped (no agent)');
+    toast(nr ? 'Reported a handled error' : 'No agent, nothing sent');
+  }
+
+  // ---- Init ----------------------------------------------------------------
+  function init() {
+    Demo.start({ state: state, onIdentity: onIdentity });
+    $('rageBtn').addEventListener('click', onRageClick);
+    $('deadBtn').addEventListener('click', onDeadClick);
+    $('errorBtn').addEventListener('click', onErrorClick);
+    $('clearFeed').addEventListener('click', clearFeed);
+
+    renderStats();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

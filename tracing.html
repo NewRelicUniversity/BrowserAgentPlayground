@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ===================================================================
+     NEW RELIC BROWSER SNIPPET + TRACE HEADER CAPTURE
+     1. The small "header capture" script below must come BEFORE the
+        New Relic snippet. The agent then wraps it, so it can see the
+        traceparent and tracestate headers the agent adds and
+        show them on the page. It never changes a request.
+     2. Same Pro+SPA snippet as index.html, with distributed tracing on.
+        If you enable CORS for a backend, re-copy the snippet from
+        Application settings so it includes the allowed origins.
+     =================================================================== -->
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="demo-identity.js"></script>
+<script src="site.js"></script>
+<script>
+/* Trace header capture (demo only): records the trace headers on outgoing requests. */
+(function () {
+  var cap = window.__dtCapture = [];
+  var NAMES = ['traceparent', 'tracestate'];
+  function pick(h, into) {
+    if (!h) return into;
+    NAMES.forEach(function (k) {
+      var v = null;
+      try { v = typeof h.get === 'function' ? h.get(k) : (h[k] || h[k.toUpperCase()]); } catch (e) {}
+      if (v) into[k] = v;
+    });
+    return into;
+  }
+  if (typeof window.fetch === 'function') {
+    var nativeFetch = window.fetch;
+    window.fetch = function (input, init) {
+      try {
+        var url = typeof input === 'string' ? input : (input && input.url) || String(input);
+        var headers = {};
+        if (input && typeof input === 'object' && input.headers) pick(input.headers, headers);
+        if (init && init.headers) pick(init.headers instanceof Headers ? init.headers : new Headers(init.headers), headers);
+        cap.push({ url: url, via: 'fetch', headers: headers, t: Date.now() });
+      } catch (e) {}
+      return nativeFetch.apply(this, arguments);
+    };
+  }
+  if (window.XMLHttpRequest) {
+    var P = XMLHttpRequest.prototype, open = P.open, setH = P.setRequestHeader, send = P.send;
+    P.open = function (m, u) { this.__dt = { url: String(u), via: 'xhr', headers: {} }; return open.apply(this, arguments); };
+    P.setRequestHeader = function (k, v) {
+      if (this.__dt && NAMES.indexOf(String(k).toLowerCase()) > -1) this.__dt.headers[String(k).toLowerCase()] = v;
+      return setH.apply(this, arguments);
+    };
+    P.send = function () { if (this.__dt) { this.__dt.t = Date.now(); cap.push(this.__dt); } return send.apply(this, arguments); };
+  }
+})();
+</script>
+<script src="nr-init.js"></script>
+<script>
+// Tracing page extras on top of nr-init.js. allowed_origins must list every backend the page calls cross-origin
+// (CONFIG.backendUrl below, and any you try with ?backend=); the agent adds no trace headers to other origins.
+NREUM.init.distributed_tracing={enabled:true,exclude_newrelic_header:true,cors_use_tracecontext_headers:true,allowed_origins:['https://browser.nru.to','http://localhost:3000']};
+NREUM.init.web_sockets={enabled:false};
+NREUM.init.api={register:{enabled:true,duplicate_data_to_container:false}};
+</script>
+<!-- NR:SNIPPET -->
+<script src="nr-config.js"></script>
+<script src="nr-agent.js"></script>
+<!-- /NR:SNIPPET -->
+
+
+
+
+<title>Browser Distributed Tracing Demo | New Relic</title>
+<link rel="icon" href="favicons/favicon.ico" sizes="48x48">
+<link rel="icon" href="favicons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="favicons/apple-touch-icon.png" sizes="180x180">
+<meta name="theme-color" content="#080F11">
+<meta name="description" content="Try New Relic distributed tracing from the browser: send requests, see the trace headers the agent adds, and follow your own traces into the backend.">
+<!-- Link previews (Slack, email, social). The image URL is absolute, so it works from any host. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Browser Agent Playground">
+<meta property="og:title" content="Browser Distributed Tracing Demo | New Relic">
+<meta property="og:description" content="Try New Relic distributed tracing from the browser: send requests, see the trace headers the agent adds, and follow your own traces into the backend.">
+<meta property="og:image" content="https://mcaronnewrelic.github.io/BrowserAgentPlayground/images/vitals-hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* ---------- Hero ---------- */
+  .hero .wrap { grid-template-columns: 1.1fr .9fr; }
+  /* Repeated from site.css because the rule above comes after it. */
+  @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } }
+  .note { max-width: 580px; }
+  .waterfall { background: var(--black); color: var(--sand); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0 30px 60px -30px rgba(8,15,17,.45); font-family: var(--mono); font-size: 12.5px; }
+  .waterfall .bar { display: flex; gap: 7px; margin-bottom: 16px; }
+  .waterfall .bar i { width: 11px; height: 11px; border-radius: 50%; background: rgba(253,252,240,.18); display: block; }
+  .waterfall .title { color: var(--white); font-size: 13px; margin-bottom: 14px; display: flex; justify-content: space-between; gap: 8px; }
+  .wf-row { display: grid; grid-template-columns: 42% 1fr; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(253,252,240,.06); }
+  .wf-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wf-name .ent { color: var(--gray); }
+  .wf-track { position: relative; height: 14px; }
+  .wf-span { position: absolute; top: 0; height: 14px; border-radius: 4px; }
+  .wf-span.browser { background: var(--green); }
+  .wf-span.net { background: var(--green-1); }
+  .wf-span.api { background: var(--blue-2); }
+  .wf-span.svc { background: var(--blue-1); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; color: var(--gray); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  /* ---------- Sections ---------- */
+  .step-head p { max-width: 64ch; }
+
+  /* ---------- Identity ---------- */
+  .identity { grid-template-columns: 1fr 1fr 1.2fr; }
+  .field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .mode-box { background: var(--panel-2); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .mode-box .label { font-size: 14px; font-weight: 600; color: var(--sand); }
+  .mode-box .mode-line { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+  .mode-box .mode-sub { font: 500 12.5px/1.4 var(--mono); color: var(--gray); word-break: break-all; }
+
+  /* ---------- Playground ---------- */
+  .playground { grid-template-columns: minmax(0, 1fr) 420px; }
+  .btn-col { display: grid; gap: 10px; }
+  .req-btn { appearance: none; cursor: pointer; text-align: left; border: 1px solid var(--line); background: var(--sys-white); color: var(--black); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; font: 600 13px/1.25 var(--mono); letter-spacing: 0; transition: border-color .15s, background .15s, transform .1s; }
+  .req-btn:hover { border-color: var(--black); background: #fff; }
+  .req-btn:active { transform: scale(.98); }
+  .req-btn small { font: 500 12px/1.35 var(--body); color: var(--ink-2); letter-spacing: -0.1px; }
+  .req-btn[disabled] { cursor: not-allowed; opacity: .5; border-style: dashed; }
+  .req-btn[disabled]:hover { border-color: var(--line); background: var(--sys-white); }
+  .req-btn.busy { border-color: var(--green-deep); box-shadow: inset 0 0 0 1px var(--green-deep); }
+  .method { display: inline-block; font: 600 10.5px/1.4 var(--mono); padding: 1px 6px; border-radius: 6px; background: var(--black); color: var(--white); margin-right: 6px; vertical-align: 1px; }
+
+  .headers-panel { background: var(--black); color: var(--sand); border-radius: 18px; padding: 18px; font-family: var(--mono); font-size: 13px; display: grid; gap: 12px; min-width: 0; }
+  .headers-panel .empty { color: var(--gray); }
+  .hrow { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+  .hrow .hname { color: var(--gray); }
+  .hrow .hval { color: var(--white); word-break: break-all; }
+  .tp .ver, .tp .flg { color: var(--gray); }
+  .tp .tid { color: var(--green); }
+  .tp .pid { color: var(--blue-1); }
+  .tp-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--gray); margin-top: 6px; }
+  .tp-legend b { font-weight: 500; }
+  .tp-legend .tid { color: var(--green); } .tp-legend .pid { color: var(--blue-1); }
+  .kv { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--sand); }
+  .kv span b { color: var(--white); font-weight: 500; }
+
+  /* ---------- Inspector ---------- */
+  .entry .code { margin-left: auto; color: var(--white); }
+  .entry .code.bad { color: var(--magenta-1); }
+  .entry .url { margin-top: 6px; font: 500 13px/1.45 var(--mono); color: var(--white); word-break: break-all; }
+  .entry .tp { margin-top: 6px; font: 500 11.5px/1.5 var(--mono); word-break: break-all; }
+  .entry .line2 { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .entry .logline { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(253,252,240,.05); font: 500 11.5px/1.5 var(--mono); color: var(--sand); word-break: break-all; }
+  .entry .logline b { color: var(--white); font-weight: 600; }
+  .entry .logline .lvl { display: inline-block; padding: 0 6px; border-radius: 6px; margin-right: 6px; color: var(--black); font-weight: 600; }
+  .lvl.info { background: var(--blue-1); } .lvl.warn { background: var(--ember-1); } .lvl.error { background: var(--magenta-1); }
+  .snippet { font: 500 12.5px/1.6 var(--mono); white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .snippet .k { color: var(--green); } .snippet .c { color: var(--gray); } .snippet .s { color: var(--blue-1); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .compare > div { background: var(--sys-white); border-radius: 16px; padding: 14px 16px; font-size: 14px; }
+  .compare h4 { margin: 0 0 6px; font-size: 13px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+  .compare ul { margin: 0; padding-left: 18px; color: var(--ink-2); }
+  .compare li { margin: 3px 0; }
+  .entry .hint { margin-top: 6px; font-size: 12.5px; color: var(--sand); opacity: .85; line-height: 1.4; }
+  .status.good { background: rgba(28,231,131,.16); color: var(--green); }
+  .status.info { background: rgba(61,157,255,.2); color: var(--blue-1); }
+  .status.muted { background: rgba(253,252,240,.08); color: var(--sand); }
+  .status.warn { background: rgba(220,70,111,.18); color: var(--magenta-1); }
+  .linkish { appearance: none; border: 0; background: none; color: var(--green); font: 600 11.5px/1.4 var(--mono); cursor: pointer; padding: 0; text-decoration: underline; }
+
+  /* ---------- Find ---------- */
+  .find-card pre.placeholder { color: var(--gray); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 1180px) {
+    /* Repeated from site.css because this page's own .playground rule above comes after it. */
+    .playground { grid-template-columns: 1fr; }
+    .feed { max-height: 560px; }
+    .identity .mode-box { grid-column: 1 / -1; }
+  }
+
+  @media (max-width: 560px) {
+    .hrow { grid-template-columns: 1fr; gap: 2px; }
+    .compare { grid-template-columns: 1fr; }
+    .wf-row { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <span>Browser data in distributed tracing works with the Pro and Pro+SPA browser agent.</span>
+    <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-pro-features/browser-data-distributed-tracing/" target="_blank" rel="noopener">Read the docs</a>
+  </div>
+</div>
+
+<script>Demo.header()</script>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">New Relic distributed tracing</div>
+        <h1 class="display" style="margin-top:18px">Follow<br>the click.</h1>
+        <p class="lede">Press a button and follow one request from this page, across the network, and into the services behind it. Every hop lands in the same trace, and so do the logs written along the way.</p>
+        <div class="ctas">
+          <a class="btn" href="#try">Start tracing <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="btn secondary" href="#find">Jump to the query</a>
+        </div>
+        <div class="note">
+          <span class="method" style="background:var(--green);color:var(--black)">traceparent</span>
+          <span>The agent adds trace headers to your page's own requests, plus any origins you allow under CORS. A backend with a New Relic APM agent reads them and joins the same trace. This page shows you the exact headers on every request.</span>
+        </div>
+      </div>
+      <div class="waterfall" aria-label="Example distributed trace">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <div class="title"><span>Trace 4bf92f35…4736</span><span>412 ms</span></div>
+        <div class="wf-row"><span class="wf-name">click: Run checkout <span class="ent">browser</span></span><span class="wf-track"><span class="wf-span browser" style="left:0;width:100%"></span></span></div>
+        <div class="wf-row"><span class="wf-name">POST /api/checkout <span class="ent">ajax</span></span><span class="wf-track"><span class="wf-span net" style="left:4%;width:90%"></span></span></div>
+        <div class="wf-row"><span class="wf-name">api/checkout <span class="ent">API</span></span><span class="wf-track"><span class="wf-span api" style="left:10%;width:78%"></span></span></div>
+        <div class="wf-row"><span class="wf-name">&nbsp;&nbsp;internal/inventory <span class="ent">API</span></span><span class="wf-track"><span class="wf-span svc" style="left:13%;width:16%"></span></span></div>
+        <div class="wf-row"><span class="wf-name">&nbsp;&nbsp;internal/payment <span class="ent">API</span></span><span class="wf-track"><span class="wf-span svc" style="left:32%;width:50%"></span></span></div>
+        <div class="legend"><span><i style="background:var(--green)"></i>browser</span><span><i style="background:var(--green-1)"></i>network</span><span><i style="background:var(--blue-2)"></i>backend</span><span><i style="background:var(--blue-1)"></i>internal call</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WHO ================= -->
+  <section class="who-bar">
+    <div class="wrap">
+      <details class="who" id="who">
+        <script>Demo.whoSummary()</script>
+        <div class="who-body">
+          <p class="muted">Your name and code are attached to your browser data as <code>demoUser</code> and <code>demoCode</code> (your name also becomes your end-user ID via <code>setUserId()</code>), and sent to the backend, which tags its transactions too. The inspector also keeps the trace ID of every request you make, so the queries below can look up exactly your traces.</p>
+          <script>Demo.identityForm()</script>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ================= TRY IT ================= -->
+  <section class="step" id="try">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Try it / Generate traces</div>
+        <h2 class="display" style="margin-top:14px">Send some requests</h2>
+        <p class="muted">Each click is a browser interaction, and each request made during it gets its own trace. The inspector on the right shows the headers the agent added, whether the backend joined the trace, and the log this page wrote for it.</p>
+      </div>
+
+      <div class="primer">
+        <div>
+          <div class="tag-row"><div class="tag">You'll learn to</div><span class="chip auto">Automatic, needs a backend</span></div>
+          <ul><li>Recognize the <code>traceparent</code> and <code>tracestate</code> headers the agent adds.</li><li>Follow one click from the browser into backend services in Distributed tracing.</li><li>Put browser and backend logs on the same trace.</li></ul>
+        </div>
+        <div>
+          <div class="tag-row"><div class="tag">Before you start</div></div>
+          <ul class="needs"><li><span class="chip where-snippet">Snippet: NREUM.init</span><span><code>init.distributed_tracing.enabled</code>, on for every page of this site in <code>nr-init.js</code>.</span></li><li><span class="chip where-settings">Application settings</span><span><b>Cross-origin resource sharing (CORS)</b>, listing any backend on another origin. Re-copy the snippet after changing it.</span></li><li><span class="chip where-settings">Application settings</span><span>Manual <b>log verbosity</b> of INFO or lower, to keep the INFO logs written for successful requests.</span></li><li><span class="chip where-backend">Backend</span><span>For backend spans, an API monitored by a New Relic APM agent: <code>backend/</code>, which also runs browser.nru.to. Without one, you still get browser spans.</span></li></ul>
+        </div>
+      </div>
+      <div class="identity page-setup">
+        <div class="mode-box" aria-live="polite">
+          <span class="label">Trace mode</span>
+          <span class="mode-line"><span class="agent-badge" id="modeBadge" style="padding:6px 12px"><span class="dot"></span><span id="modeText">Browser-only</span></span></span>
+          <span class="mode-sub" id="modeSub">Requests go to static files on this site. You will see browser spans and real trace headers.</span>
+        </div>
+      </div>
+
+      <div class="playground">
+        <div class="cards">
+
+          <article class="card wide" aria-labelledby="hdrTitle">
+            <div class="tag">What the agent adds</div>
+            <h3 id="hdrTitle">Headers on your last request</h3>
+            <p>These are the real values the browser agent attached. <code>traceparent</code> is the W3C standard header that carries the trace ID. <code>tracestate</code> carries New Relic's account and app details so the trace is stitched together correctly.</p>
+            <div class="headers-panel" id="headersPanel"><span class="empty">Send a request below to see its trace headers.</span></div>
+          </article>
+
+          <article class="card wide" aria-labelledby="logsTitle">
+            <div class="tag">Logs in the trace</div>
+            <h3 id="logsTitle">Put your logs on the same trace</h3>
+            <p>The agent puts trace headers on your requests automatically, but it does <b>not</b> add a trace ID to browser logs from <code>newrelic.log()</code> or <code>wrapLogger()</code>. Add it yourself as <code>trace.id</code>, the attribute New Relic uses to show logs on a trace. A key like <code>traceId</code> would be saved but not linked.</p>
+            <div class="compare">
+              <div><h4>Added to every browser log</h4><ul><li><code>session</code>, the browser session ID</li><li><code>ptid</code>, the page view's trace ID</li><li><code>pageUrl</code> and your custom attributes, like <code>demoCode</code></li></ul></div>
+              <div><h4>You add per request</h4><ul><li><code>trace.id</code> from the <code>traceparent</code> your request carried (this page captures it)</li><li>or from the response: the demo backend returns <code>x-trace-id</code>, exposed through CORS</li></ul></div>
+            </div>
+<pre class="snippet"><span class="c">// After a request: log with the same trace ID the request carried</span>
+<span class="k">const</span> traceId = traceparent.split(<span class="s">'-'</span>)[<span class="s">1</span>]  <span class="c">// version-TRACEID-parentId-flags</span>
+newrelic.<span class="k">log</span>(<span class="s">'GET /api/products 200'</span>, {
+  level: <span class="s">'info'</span>,
+  customAttributes: { <span class="s">'trace.id'</span>: traceId, requestUrl: <span class="s">'/api/products'</span> }
+})</pre>
+            <p>On the server, the Node.js agent's <code>newrelic.recordLogEvent()</code> adds <code>trace.id</code> and <code>span.id</code> for you, so checkout writes three backend logs (inventory, payment, checkout) onto your trace. Successful requests log at INFO, so set your app's manual log verbosity to INFO or lower in Application settings.</p>
+          </article>
+
+          <article class="card" aria-labelledby="singleTitle">
+            <div class="tag">1 · A single request</div>
+            <h3 id="singleTitle">fetch and XHR</h3>
+            <p>Both request styles are traced the same way. Compare their headers in the inspector.</p>
+            <div class="btn-col" id="singleButtons"></div>
+          </article>
+
+          <article class="card" aria-labelledby="flowTitle">
+            <div class="tag">2 · A user journey</div>
+            <h3 id="flowTitle">Checkout flow</h3>
+            <p>One click, three requests in a row: cart, checkout, order. With the backend, checkout also calls internal inventory and payment services, which appear as child spans in the same trace.</p>
+            <div class="btn-col" id="flowButtons"></div>
+          </article>
+
+          <article class="card" aria-labelledby="badTitle">
+            <div class="tag">3 · When things go wrong</div>
+            <h3 id="badTitle">Slow and failing calls</h3>
+            <p>Traces show you where the time went and which hop failed. Slow and server-error calls need the backend.</p>
+            <div class="btn-col" id="badButtons"></div>
+          </article>
+
+          <article class="card" aria-labelledby="xoTitle">
+            <div class="tag">4 · Cross-origin</div>
+            <h3 id="xoTitle">Requests that are not traced</h3>
+            <p>Browsers block custom headers on cross-origin requests unless the other server allows them. So the agent only adds trace headers to origins you list under CORS in Application settings.</p>
+            <div class="btn-col" id="xoButtons"></div>
+          </article>
+
+        </div>
+
+        <aside class="feed" aria-labelledby="feedTitle">
+          <div class="feed-head">
+            <div class="top">
+              <h3 id="feedTitle">Trace inspector</h3>
+              <button id="clearFeed" class="btn ghost-dark small" type="button">Clear</button>
+            </div>
+            <div class="feed-stats" aria-live="polite">
+              <span><b id="statReq">0</b> requests</span>
+              <span><b id="statTraced">0</b> traced</span>
+              <span><b id="statJoined">0</b> joined by backend</span>
+            </div>
+          </div>
+          <ul class="feed-list" id="feed">
+            <li class="feed-empty" id="feedEmpty">Nothing yet. Send a request to see its trace.</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FIND IT ================= -->
+  <section class="step find" id="find">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Find it / In New Relic</div>
+        <h2 class="display" style="margin-top:14px">Find your traces</h2>
+        <p>Data arrives in batches, usually within a minute (<a href="install.html#timing">why</a>). The first query uses the trace IDs captured from your own requests, so it matches only your traces.</p>
+      </div>
+      <div class="find-grid">
+        <div class="find-step">1 · See it in New Relic</div>
+        <div class="find-card full">
+          <h3>In Distributed tracing</h3>
+          <ol>
+            <li>In New Relic, open <b>Browser</b>, select the app, then <b>Distributed tracing</b>.</li>
+            <li>Search for one of your trace IDs. The inspector above has a <b>Copy trace ID</b> button on each request.</li>
+            <li>The waterfall starts with the browser's span, then the API and, for checkout, its <code>inventory</code> and <code>payment</code> calls. Open the trace's <b>Logs</b> tab to see browser and backend logs side by side.</li>
+          </ol>
+        </div>
+        <div class="find-step">2 · Query it</div>
+        <div class="find-card full">
+          <h3>Your traces, by trace ID</h3>
+          <ol>
+            <li>Open the query builder in New Relic and run this. Browser spans show <code>browserApp.name</code>; backend spans show <code>appName</code>.</li>
+            <li>To see a waterfall, open <b>Distributed tracing</b> and search for one of these trace IDs.</li>
+          </ol>
+          <p class="expect"><b>You should see:</b> Spans from both sides of each trace: browser spans with <code>browserApp.name</code>, backend spans with <code>appName</code>.</p>
+          <pre id="nrqlSpans" class="placeholder">Send a request above to fill in your trace IDs.</pre>
+          <div class="actions">
+            <button class="btn green small js-copy" data-copy-target="nrqlSpans" type="button">Copy NRQL</button>
+            <a class="btn ghost-dark small" data-entity="apmService" href="https://one.newrelic.com" target="_blank" rel="noopener">Open New Relic <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="find-card full">
+          <h3>Your logs, browser and backend together</h3>
+          <ol>
+            <li>Run this to see every log written on your traces. Browser logs have a <code>session</code>; backend logs have a <code>span.id</code>.</li>
+            <li>Or open any of your traces in <b>Distributed tracing</b> and look at its <b>Logs</b> tab.</li>
+          </ol>
+          <p class="expect"><b>You should see:</b> A browser log for each request (with a <code>session</code>), and backend logs with a <code>span.id</code>, all sharing the trace IDs.</p>
+          <pre id="nrqlLogs" class="placeholder">Send a request above to fill in your trace IDs.</pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlLogs" type="button">Copy NRQL</button></div>
+        </div>
+        <div class="find-card">
+          <h3>Your requests, from the browser</h3>
+          <p>Every request is also an <code>AjaxRequest</code> event tagged with your code.</p>
+          <p class="expect"><b>You should see:</b> One row per request you sent, with its URL, status code and time to settle.</p>
+          <pre id="nrqlAjax"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlAjax" type="button">Copy NRQL</button></div>
+        </div>
+        <div class="find-card">
+          <h3>Your requests, from the backend</h3>
+          <p id="txnNote">With the backend connected, its transactions carry your code too.</p>
+          <p class="expect"><b>You should see:</b> One row per backend transaction your requests caused. Its <code>traceId</code> matches the browser's.</p>
+          <pre id="nrqlTxn"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlTxn" type="button">Copy NRQL</button></div>
+        </div>
+      </div>
+      <div class="find-step tips-head">3 · Didn't see it?</div>
+      <div class="tips">
+        <div class="tip"><b>No backend spans?</b>In browser-only mode that is expected. Static files have no APM agent. Connect the backend in <code>backend/README.md</code> to see the full path.</div>
+        <div class="tip"><b>No INFO logs?</b>Successful requests log at INFO. If your app keeps only WARN and above, raise the manual log verbosity under Browser &gt; Application settings.</div>
+        <div class="tip"><b>Backend not joining?</b>The inspector's status for each request says which piece is missing. <code>backend/README.md</code> lists the three settings that have to line up for a backend on another domain.</div>
+        <div class="tip"><b>Learn more</b><a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-pro-features/browser-data-distributed-tracing/" target="_blank" rel="noopener">Browser data in distributed tracing</a> · <a href="https://www.w3.org/TR/trace-context/" target="_blank" rel="noopener">W3C Trace Context</a> · WebSockets get no trace headers; see <a href="websockets.html">WebSockets</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHECK ================= -->
+  <section class="step" id="check">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Check it / Your understanding</div>
+        <h2 class="display" style="margin-top:14px">Check yourself</h2>
+        <p class="muted">Pick an answer. A wrong pick can be retried.</p>
+      </div>
+      <p class="quiz-note">Each answer is recorded as a <code>DemoQuizAnswer</code> custom event, with your session code like everything else on this site, so we can see which questions trip people up. Only the option you pick is recorded.</p>
+      <div class="quiz">
+        <div class="q" data-qid="tracing-third-party">
+          <p class="q-text">A request to a third-party API went out with no trace headers. Why?</p>
+          <div class="q-options"><button class="q-opt" type="button" data-correct>The agent adds them only to same-origin requests and origins allowed under CORS</button><button class="q-opt" type="button">Third-party servers strip them on the way in</button><button class="q-opt" type="button">Only XHR requests get trace headers, not fetch</button></div>
+          <p class="q-feedback" hidden>Browsers block custom headers on other cross-origin requests, so you list the origins that accept them in Application settings.</p>
+        </div>
+        <div class="q" data-qid="tracing-log-link">
+          <p class="q-text">Do logs from <code>newrelic.log()</code> appear on a trace automatically?</p>
+          <div class="q-options"><button class="q-opt" type="button">Yes, every browser log carries the current trace ID</button><button class="q-opt" type="button">Only when the backend writes a log too</button><button class="q-opt" type="button" data-correct>No, you add <code>trace.id</code> to the log yourself</button></div>
+          <p class="q-feedback" hidden>The agent doesn't add a trace ID to browser logs. <code>trace.id</code> is the attribute New Relic uses to link a log to a trace.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>Demo.upNext()</script>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>A sample page for exploring New Relic distributed tracing from the browser.</span>
+    <span>Avoid typing anything sensitive. Data is visible to everyone in the shared account.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ================= LOGIC (pure functions, tested by backend/page-logic.test.js) ================= -->
+<script>
+/*LOGIC-START*/
+(function (root) {
+  // W3C traceparent: version-traceid-parentid-flags
+  function parseTraceparent(value) {
+    var m = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/.exec(String(value || '').trim().toLowerCase());
+    if (!m || /^0+$/.test(m[2]) || /^0+$/.test(m[3])) return null;
+    return { version: m[1], traceId: m[2], parentId: m[3], flags: m[4], sampled: (parseInt(m[4], 16) & 1) === 1 };
+  }
+
+  function normalizeBackendUrl(url) {
+    var s = String(url || '').trim();
+    if (!/^https?:\/\/[^\s/]+/i.test(s)) return '';
+    return s.replace(/\/+$/, '');
+  }
+
+  var STATIC = { products: 'data/products.json', cart: 'data/cart.json', checkout: 'data/checkout.json', order: 'data/order.json', missing: 'data/missing.json' };
+  var API = {
+    health: ['GET', '/api/health'], products: ['GET', '/api/products'], cart: ['GET', '/api/cart'],
+    checkout: ['POST', '/api/checkout'], order: ['GET', '/api/orders/latest'],
+    recommendations: ['GET', '/api/recommendations'], catalog: ['GET', '/api/catalog?items=8'],
+    profile: ['GET', '/api/profile'],
+    slow: ['GET', '/api/slow?ms=1500'], fail: ['GET', '/api/fail'], missing: ['GET', '/api/missing']
+  };
+  function resolveEndpoint(name, backendUrl) {
+    var base = normalizeBackendUrl(backendUrl);
+    if (base) {
+      var a = API[name];
+      return a ? { url: base + a[1], method: a[0], target: 'backend' } : null;
+    }
+    return STATIC[name] ? { url: STATIC[name], method: 'GET', target: 'static' } : null;
+  }
+
+  function withParams(url, params) {
+    var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+    return url + (url.indexOf('?') > -1 ? '&' : '?') + q;
+  }
+
+  // sent: parsed traceparent the browser sent (or null); backend: the "trace" object the API returned.
+  function traceStatus(o) {
+    if (o.target !== 'backend') return o.sent ? 'browser-only' : 'not-traced';
+    if (!o.sent) return 'needs-cors';
+    if (!o.backend) return 'no-backend-data';
+    if (!o.backend.received || !o.backend.received.traceparent) return 'not-received';
+    if (!o.backend.apm) return 'no-apm';
+    return o.backend.apm.traceId === o.sent.traceId ? 'joined' : 'mismatch';
+  }
+
+  // Newest first, unique, valid W3C trace IDs only, at most 20.
+  function recentTraceIds(traceIds) {
+    var seen = {}, ids = [];
+    for (var i = traceIds.length - 1; i >= 0 && ids.length < 20; i--) {
+      var id = String(traceIds[i] || '').toLowerCase();
+      if (/^[0-9a-f]{32}$/.test(id) && !seen[id]) { seen[id] = 1; ids.push(id); }
+    }
+    return ids;
+  }
+  function inList(ids) { return ids.map(function (x) { return "'" + x + "'"; }).join(', '); }
+  function buildSpanNrql(traceIds) {
+    var ids = recentTraceIds(traceIds);
+    if (!ids.length) return null;
+    return "SELECT trace.id, name, browserApp.name, appName, duration.ms\n" +
+           "FROM Span\n" +
+           "WHERE trace.id IN (" + inList(ids) + ")\n" +
+           "SINCE 1 hour ago LIMIT 200";
+  }
+  function buildLogsNrql(traceIds) {
+    var ids = recentTraceIds(traceIds);
+    if (!ids.length) return null;
+    return "SELECT timestamp, level, message, trace.id, span.id, session, entity.name\n" +
+           "FROM Log\n" +
+           "WHERE trace.id IN (" + inList(ids) + ")\n" +
+           "SINCE 1 hour ago LIMIT 200";
+  }
+
+  function isTraceId(v) { return /^[0-9a-f]{32}$/.test(String(v || '').toLowerCase()) && !/^0+$/.test(String(v)); }
+  // Which trace ID should a browser log carry? The one the request was sent with (always
+  // present when the agent traced it). The response (x-trace-id header or JSON body) is
+  // a second source, reported so you can see whether the backend agreed.
+  function traceIdForLog(o) {
+    var fromHeader = isTraceId(o.responseHeader) ? String(o.responseHeader).toLowerCase() : null;
+    var fromBody = o.backend && o.backend.apm && isTraceId(o.backend.apm.traceId) ? String(o.backend.apm.traceId).toLowerCase() : null;
+    var resp = fromHeader || fromBody;
+    if (o.sent) return { traceId: o.sent.traceId, source: 'request-header', responseTraceId: resp, match: resp ? resp === o.sent.traceId : null };
+    if (fromHeader) return { traceId: fromHeader, source: 'response-header', responseTraceId: fromHeader, match: null };
+    if (fromBody) return { traceId: fromBody, source: 'response-body', responseTraceId: fromBody, match: null };
+    return { traceId: null, source: 'none', responseTraceId: null, match: null };
+  }
+  function logLevelFor(status, failed) {
+    if (failed || !status || status >= 500) return 'error';
+    return status >= 400 ? 'warn' : 'info';
+  }
+  function buildLogAttributes(o) {
+    var a = { traceIdSource: o.trace.source, requestUrl: String(o.url).split('?')[0], httpStatus: o.status, requestMethod: o.method, requestVia: o.via };
+    if (o.trace.traceId) a['trace.id'] = o.trace.traceId; // logs-in-context key; omit rather than send null
+    if (o.trace.match !== null) a.responseTraceIdMatches = o.trace.match;
+    return a;
+  }
+
+  function buildAjaxNrql(code) {
+    return "SELECT timestamp, requestUrl, httpResponseCode, timeToSettle, demoUser\n" +
+           "FROM AjaxRequest\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago LIMIT 100";
+  }
+  function buildTransactionNrql(code) {
+    return "SELECT timestamp, name, duration, httpResponseCode, traceId\n" +
+           "FROM Transaction\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago LIMIT 100";
+  }
+
+  root.TraceDemo = {
+    parseTraceparent: parseTraceparent,
+    normalizeBackendUrl: normalizeBackendUrl,
+    resolveEndpoint: resolveEndpoint, withParams: withParams, traceStatus: traceStatus,
+    buildSpanNrql: buildSpanNrql, buildAjaxNrql: buildAjaxNrql, buildTransactionNrql: buildTransactionNrql,
+    buildLogsNrql: buildLogsNrql, traceIdForLog: traceIdForLog, logLevelFor: logLevelFor, buildLogAttributes: buildLogAttributes
+  };
+})(window);
+/*LOGIC-END*/
+</script>
+
+<!-- ================= UI ================= -->
+<script>
+(function () {
+  'use strict';
+
+  // ---- CONFIG -------------------------------------------------------------
+  // The backend this page calls when it isn't served by one itself (GitHub Pages, a local
+  // static server). It must allow this page's origin under CORS (ALLOWED_ORIGINS in
+  // backend/README.md), and be listed in distributed_tracing.allowed_origins at the top
+  // of this page. Set it to '' for browser-only mode.
+  // Which backend is used, first match wins:
+  //   1. tracing.html?backend=URL (or ?backend=none for browser-only mode)
+  //   2. the same origin, when backend/server.js served this page
+  //   3. CONFIG.backendUrl
+  var CONFIG = { backendUrl: 'https://browser.nru.to' };
+  // -------------------------------------------------------------------------
+
+  var L = window.TraceDemo;
+  var $ = function (id) { return document.getElementById(id); };
+  var param = new URLSearchParams(location.search).get('backend');
+  var servedByBackend = !!document.querySelector('meta[name="demo-backend"]');
+  var ID = window.DemoIdentity.current();
+  var state = {
+    name: ID.name, code: ID.code,
+    backend: L.normalizeBackendUrl(param || (servedByBackend ? location.origin : CONFIG.backendUrl)),
+    traceIds: [], stats: { req: 0, traced: 0, joined: 0 }
+  };
+
+  var STATUS = {
+    'joined':          { cls: 'good',  label: 'Backend joined trace', hint: 'The API saw this trace ID and continued it. Open it in Distributed tracing to see browser and backend spans together.' },
+    'browser-only':    { cls: 'info',  label: 'Browser span',         hint: 'Traced from the browser. Static files have no APM agent, so the trace ends here.' },
+    'not-traced':      { cls: 'muted', label: 'Not traced',           hint: 'No trace headers. The agent only adds them to same-origin requests and origins allowed under CORS.' },
+    'needs-cors':      { cls: 'warn',  label: 'Agent added no trace headers', hint: 'Add the backend origin under CORS in Application settings, then re-copy the snippet into the page.' },
+    'no-backend-data': { cls: 'warn',  label: 'No trace info from backend', hint: 'The request failed or did not return the demo backend\'s JSON. Check the backend URL and that it is running.' },
+    'not-received':    { cls: 'warn',  label: 'Backend saw no headers', hint: 'Headers were sent but did not arrive. A proxy or CORS setting may be stripping them.' },
+    'no-apm':          { cls: 'warn',  label: 'Backend has no APM agent', hint: 'The backend received the headers but runs without New Relic. Set NEW_RELIC_LICENSE_KEY and restart it.' },
+    'mismatch':        { cls: 'warn',  label: 'Backend started a new trace', hint: 'The APM agent did not continue this trace. Check that distributed tracing is enabled in the backend agent.' }
+  };
+
+  var agent = Demo.agent, safe = Demo.safe, esc = Demo.esc, toast = Demo.toast;
+  function userName() { return state.name || 'anonymous'; }
+  function rid() { return 'R' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function shortUrl(u) { return u.replace(/^https?:\/\/[^/]+/, function (o) { return o.length > 34 ? o.slice(0, 34) + '…' : o; }).replace(/[?&]rid=[^&]+/, '').replace(/[?&]demoCode=[^&]+/, '').replace(/[?&]demoUser=[^&]*/, ''); }
+
+  // ---- Agent + identity ------------------------------------------------
+  // Runs after every name or code change (Demo.start sets the custom attributes): refreshes this page's queries.
+  function onIdentity() {
+    $('nrqlAjax').textContent = L.buildAjaxNrql(state.code);
+    $('nrqlTxn').textContent = L.buildTransactionNrql(state.code);
+    renderSpanQuery();
+  }
+
+  // ---- Mode -------------------------------------------------------------
+  function setMode(kind, text, sub) {
+    var b = $('modeBadge');
+    b.classList.toggle('on', kind === 'on'); b.classList.toggle('off', kind === 'off');
+    $('modeText').textContent = text; $('modeSub').textContent = sub;
+  }
+  function checkBackend() {
+    if (!state.backend) {
+      setMode('', 'Browser-only', 'Requests go to static files on this site. You will see browser spans and real trace headers.');
+      $('txnNote').textContent = 'Connect the backend to see its transactions here. In browser-only mode this query returns nothing.';
+      return;
+    }
+    setMode('', 'Full stack: checking…', state.backend);
+    var ep = L.resolveEndpoint('health', state.backend);
+    fetch(ep.url, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      var apm = j && j.data && j.data.apm;
+      setMode(apm ? 'on' : 'off', apm ? 'Full stack: connected' : 'Backend up, APM off', state.backend);
+    }).catch(function () {
+      setMode('off', 'Backend unreachable', state.backend + ' (free hosts can take ~30 s to wake up)');
+    });
+  }
+
+  // ---- Requests ---------------------------------------------------------
+  function findCapture(id) {
+    var cap = window.__dtCapture || [];
+    for (var i = cap.length - 1; i >= 0; i--) if (String(cap[i].url).indexOf('rid=' + id) > -1) return cap[i];
+    return null;
+  }
+  function viaXhr(url, method, body) {
+    return new Promise(function (resolve, reject) {
+      var x = new XMLHttpRequest();
+      x.open(method, url);
+      if (body) x.setRequestHeader('Content-Type', 'application/json');
+      x.onload = function () {
+        // Only ask for x-trace-id when the server exposes it, so the browser doesn't warn.
+        var exposed = /x-trace-id/i.test(x.getAllResponseHeaders());
+        resolve({ status: x.status, ok: x.status >= 200 && x.status < 300, text: x.responseText, traceHeader: exposed ? x.getResponseHeader('x-trace-id') : null });
+      };
+      x.onerror = function () { reject(new Error('Network error')); };
+      x.send(body || null);
+    });
+  }
+  function viaFetch(url, method, body) {
+    var init = { method: method, cache: 'no-store' };
+    if (body) { init.body = body; init.headers = { 'Content-Type': 'application/json' }; }
+    return fetch(url, init).then(function (r) { return r.text().then(function (t) { return { status: r.status, ok: r.ok, text: t, traceHeader: r.headers.get('x-trace-id') }; }); });
+  }
+  // Sends one request and records it in the inspector. Resolves with the parsed JSON (or null).
+  function send(opts) {
+    // opts: { url, method, target, via ('fetch'|'xhr'), label }
+    var id = rid();
+    var params = { rid: id };
+    if (opts.target !== 'thirdparty') { params.demoCode = state.code; params.demoUser = userName(); }
+    var url = L.withParams(opts.url, params);
+    var body = opts.method === 'POST' ? JSON.stringify({ demoCode: state.code }) : null;
+    var t0 = performance.now();
+    var run = opts.via === 'xhr' ? viaXhr : viaFetch;
+    return run(url, opts.method, body).then(function (res) {
+      var json = null; try { json = JSON.parse(res.text); } catch (e) {}
+      finish(opts, id, url, res.status, Math.round(performance.now() - t0), json, null, res.traceHeader);
+      return json;
+    }, function (err) {
+      finish(opts, id, url, 0, Math.round(performance.now() - t0), null, err.message);
+      return null;
+    });
+  }
+  function finish(opts, id, url, status, ms, json, errMsg, traceHeader) {
+    var cap = findCapture(id);
+    var headers = (cap && cap.headers) || {};
+    var sent = L.parseTraceparent(headers.traceparent);
+    var st = L.traceStatus({ sent: sent, target: opts.target, backend: json && json.trace });
+    state.stats.req++;
+    if (sent) { state.stats.traced++; state.traceIds.push(sent.traceId); }
+    if (st === 'joined') state.stats.joined++;
+    var logged = logRequest(opts, url, status, errMsg, L.traceIdForLog({ sent: sent, responseHeader: traceHeader, backend: json && json.trace }));
+    record({ via: opts.via, method: opts.method, url: url, status: status, ms: ms, headers: headers, sent: sent, st: st, err: errMsg, log: logged });
+    renderHeaders(headers, opts, url);
+    renderSpanQuery();
+  }
+  // Writes one browser log per request, on the request's trace (see the "Logs in the trace" card).
+  // Error-level requests also get a matching noticeError() call so the trace shows up on the Errors page too.
+  function logRequest(opts, url, status, errMsg, trace) {
+    var level = L.logLevelFor(status, !!errMsg);
+    // No session code in the message: the log and error carry demoCode as an attribute, and everyone's
+    // failures of the same request share one error group.
+    var message = opts.method + ' ' + shortUrl(url) + ' ' + (status || 'failed') + (errMsg ? ' (' + errMsg + ')' : '');
+    var attrs = L.buildLogAttributes({ trace: trace, url: shortUrl(url), method: opts.method, status: status, via: opts.via });
+    var nr = agent(), sent = false;
+    if (nr && typeof nr.log === 'function') { safe(function () { nr.log(message, { level: level, customAttributes: attrs }); }); sent = true; }
+    if (nr && level === 'error' && typeof nr.noticeError === 'function') {
+      safe(function () { nr.noticeError(new Error(message), attrs); });
+    }
+    return { level: level, message: message, attrs: attrs, sent: sent, trace: trace };
+  }
+
+  function api(name, via) {
+    var ep = L.resolveEndpoint(name, state.backend);
+    if (!ep) return Promise.resolve(null);
+    return send({ url: ep.url, method: ep.method, target: ep.target, via: via || 'fetch' });
+  }
+
+  // ---- Rendering -----------------------------------------------------------
+  function tpHtml(raw) {
+    var p = L.parseTraceparent(raw);
+    if (!p) return esc(raw);
+    return '<span class="tp"><span class="ver">' + p.version + '</span>-<span class="tid">' + p.traceId + '</span>-<span class="pid">' + p.parentId + '</span>-<span class="flg">' + p.flags + '</span></span>';
+  }
+  function renderHeaders(h, opts, url) {
+    var panel = $('headersPanel');
+    var rows = '<div class="hrow"><span class="hname">request</span><span class="hval">' + esc(opts.method + ' ' + shortUrl(url)) + '</span></div>';
+    if (!h.traceparent && !h.tracestate) {
+      rows += '<div class="hrow"><span class="hname">headers</span><span class="hval" style="color:var(--gray)">None added. ' +
+        (!agent() ? 'The browser agent is not on this page.'
+          : opts.target === 'thirdparty' ? 'This origin is not on the CORS allowed list.'
+          : opts.target === 'backend' ? 'The backend origin is not on the CORS allowed list yet, or the snippet was not re-copied after adding it.'
+          : 'Check that distributed tracing is on for this app.') + '</span></div>';
+      panel.innerHTML = rows; return;
+    }
+    if (h.traceparent) {
+      var p = L.parseTraceparent(h.traceparent);
+      rows += '<div class="hrow"><span class="hname">traceparent</span><span class="hval">' + tpHtml(h.traceparent) +
+        '<div class="tp-legend"><b>version</b><b class="tid">trace ID</b><b class="pid">parent span ID</b><b>flags' + (p ? (p.sampled ? ' (sampled)' : ' (not sampled)') : '') + '</b></div></span></div>';
+    }
+    if (h.tracestate) rows += '<div class="hrow"><span class="hname">tracestate</span><span class="hval">' + esc(h.tracestate) + '</span></div>';
+    panel.innerHTML = rows;
+  }
+  function record(e) {
+    var s = STATUS[e.st];
+    var t = Demo.time();
+    var bad = !e.status || e.status >= 400;
+    Demo.feed.add(
+      '<div class="line1"><span>' + t + '</span><span class="via">' + e.via + '</span><span class="method">' + e.method + '</span>' +
+      '<span class="code' + (bad ? ' bad' : '') + '">' + (e.status || 'failed') + ' · ' + e.ms + ' ms</span></div>' +
+      '<div class="url">' + esc(shortUrl(e.url)) + '</div>' +
+      (e.headers.traceparent ? '<div class="tp">' + tpHtml(e.headers.traceparent) + '</div>' : '') +
+      '<div class="line2"><span class="status ' + s.cls + '">' + esc(s.label) + '</span>' +
+      (e.sent ? '<button class="linkish js-copy-id" type="button" data-id="' + e.sent.traceId + '">Copy trace ID</button>' : '') + '</div>' +
+      '<div class="hint">' + esc(s.hint) + (e.err ? ' (' + esc(e.err) + ')' : '') + '</div>' +
+      logLineHtml(e.log));
+    $('statReq').textContent = state.stats.req; $('statTraced').textContent = state.stats.traced; $('statJoined').textContent = state.stats.joined;
+    toast(e.method + ' ' + (e.status || 'failed') + ' · ' + s.label);
+  }
+  function logLineHtml(log) {
+    if (!log) return '';
+    var t = log.trace, tid = t.traceId ? t.traceId.slice(0, 8) + '…' + t.traceId.slice(-4) : 'none';
+    var src = { 'request-header': 'from request traceparent', 'response-header': 'from x-trace-id', 'response-body': 'from response body', none: 'no trace' }[t.source];
+    var agree = t.match === true ? ' · response agrees' : (t.match === false ? ' · response differs' : '');
+    return '<div class="logline"><span class="lvl ' + log.level + '">' + log.level.toUpperCase() + '</span>' + (log.sent ? 'newrelic.log' : 'not sent (no agent)') +
+      ' · <b>trace.id</b> ' + esc(tid) + ' <span>(' + esc(src + agree) + ')</span></div>';
+  }
+  function renderSpanQuery() {
+    [['nrqlSpans', L.buildSpanNrql(state.traceIds)], ['nrqlLogs', L.buildLogsNrql(state.traceIds)]].forEach(function (pair) {
+      var pre = $(pair[0]), q = pair[1];
+      pre.textContent = q || 'Send a request above to fill in your trace IDs.';
+      pre.classList.toggle('placeholder', !q);
+    });
+  }
+  function clearFeed() {
+    state.stats = { req: 0, traced: 0, joined: 0 };
+    Demo.feed.clear('Inspector cleared. Your trace IDs are still in the queries below.');
+    $('statReq').textContent = 0; $('statTraced').textContent = 0; $('statJoined').textContent = 0;
+  }
+
+  // ---- Buttons ---------------------------------------------------------------
+  function reqBtn(method, label, hint, onClick, disabledReason) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'req-btn';
+    b.innerHTML = '<span><span class="method">' + method + '</span>' + esc(label) + '</span><small>' + esc(disabledReason || hint) + '</small>';
+    if (disabledReason) b.disabled = true;
+    b.addEventListener('click', function () {
+      if (b.classList.contains('busy')) return;
+      b.classList.add('busy');
+      Promise.resolve(onClick()).then(function () { b.classList.remove('busy'); }, function () { b.classList.remove('busy'); });
+    });
+    return b;
+  }
+  function buildButtons() {
+    var be = !!state.backend, needs = be ? null : 'Needs the backend (see backend/README.md)';
+    var label = function (name) { var ep = L.resolveEndpoint(name, state.backend) || L.resolveEndpoint(name, 'https://api'); return shortUrl(ep.url); };
+    $('singleButtons').appendChild(reqBtn('GET', 'Load catalog with fetch', label('products'), function () { return api('products', 'fetch'); }));
+    $('singleButtons').appendChild(reqBtn('GET', 'Load catalog with XHR', label('products'), function () { return api('products', 'xhr'); }));
+    $('singleButtons').appendChild(reqBtn('GET', 'Get recommendations', label('recommendations') + ' (computes on the server)', function () { return api('recommendations'); }, needs));
+    $('singleButtons').appendChild(reqBtn('GET', 'Load full catalog', label('catalog') + ' (one call per item)', function () { return api('catalog'); }, needs));
+    $('singleButtons').appendChild(reqBtn('GET', 'Load your profile', label('profile'), function () { return api('profile'); }, needs));
+    $('flowButtons').appendChild(reqBtn(be ? 'POST' : 'GET', 'Run checkout', 'cart, then checkout, then order', function () {
+      return api('cart').then(function () { return api('checkout'); }).then(function () { return api('order'); });
+    }));
+    $('badButtons').appendChild(reqBtn('GET', 'Request a missing resource', 'Returns 404', function () { return api('missing'); }));
+    $('badButtons').appendChild(reqBtn('GET', 'Slow API call', label('slow') + ' (1.5 s)', function () { return api('slow'); }, needs));
+    $('badButtons').appendChild(reqBtn('GET', 'Server error', label('fail') + ' (500, noticeError on backend)', function () { return api('fail'); }, needs));
+    $('xoButtons').appendChild(reqBtn('GET', 'Call a third-party API', 'fonts.googleapis.com (not on the allowed list)', function () {
+      return send({ url: 'https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap', method: 'GET', target: 'thirdparty', via: 'fetch' });
+    }));
+  }
+
+  // ---- Init --------------------------------------------------------------------
+  function init() {
+    buildButtons();
+    $('clearFeed').addEventListener('click', clearFeed);
+    $('feed').addEventListener('click', function (e) { var b = e.target.closest('.js-copy-id'); if (b) Demo.copyText(b.dataset.id, b); });
+    Demo.start({ state: state, onIdentity: onIdentity });
+    checkBackend();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

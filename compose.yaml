@@ -1,0 +1,82 @@
+# browser.nru.to on one Docker host: the demo site and API, the New Relic infrastructure agent, and
+# simulated visitors. From the repository folder:
+#
+#   NEW_RELIC_LICENSE_KEY=your_ingest_key docker compose up -d --build
+#
+# Settings come from the environment or a .env file next to this one (never commit it). See README.md.
+name: browser-agent-playground
+
+# Docker keeps container logs forever by default; keep at most 3 x 10 MB per container.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # The pages and the tracing API on port 3000, with the APM agent (it also injects the browser agent).
+  app:
+    build: .
+    image: browser-agent-playground
+    # Only this machine can reach port 3000 (Caddy on the host proxies to it). Docker's published ports
+    # bypass host firewalls such as ufw, so without 127.0.0.1 the app would be open on every interface.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY:?Set NEW_RELIC_LICENSE_KEY to your ingest license key}
+      # Empty means the default list in backend/server.js.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # The APM app name. Empty means the default in backend/newrelic.js ("Browser Agent Playground API").
+      # browser.nru.to sets it in its env file; changing it makes New Relic start a separate APM app.
+      NEW_RELIC_APP_NAME: ${NEW_RELIC_APP_NAME:-}
+      NEW_RELIC_API_KEY: ${NEW_RELIC_API_KEY:-}
+    logging: *logging
+    restart: unless-stopped
+
+  # The infrastructure agent for this host and its containers, set up the way New Relic documents for
+  # Docker: it reads the host through /host and the Docker socket, and shares the host's network and processes.
+  newrelic-infra:
+    image: newrelic/infrastructure:1.80.5
+    cap_add:
+      - SYS_PTRACE
+    network_mode: host
+    pid: host
+    privileged: true
+    volumes:
+      - "/:/host:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      NRIA_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY:?Set NEW_RELIC_LICENSE_KEY to your ingest license key}
+      NRIA_DISPLAY_NAME: ${INFRA_DISPLAY_NAME:-browser.nru.to}
+      # Report per-process metrics (ProcessSample). Off by default in recent agents. The noisy-neighbor
+      # bonus exercise needs it, so students can trace host load down to the busy process. See exercises/.
+      NRIA_ENABLE_PROCESS_METRICS: "true"
+      # Keep the app, investigation culprit and supporting services; omit browser workers and helper processes.
+      NRIA_INCLUDE_MATCHING_METRICS: '{"process.name":["node","noisy-neighbor","caddy","dockerd","containerd","newrelic-infra"]}'
+      # Becomes a tag on the host entity; the Agent Playground workload finds the host by it.
+      NRIA_CUSTOM_ATTRIBUTES: '{"project":"agent-playground"}'
+    logging: *logging
+    restart: unless-stopped
+
+  # Simulated visitors: real Chromium, Firefox and WebKit browsers walking the learning path.
+  # They go through the public site by default, so their data looks like real visits. Their session
+  # codes start with SIM-. To run without them: docker compose up -d app newrelic-infra
+  traffic:
+    build: ./traffic
+    image: browser-agent-playground-traffic
+    depends_on:
+      - app
+    environment:
+      SITE_URL: ${TRAFFIC_SITE_URL:-https://browser.nru.to}
+      VISITS_PER_HOUR: ${TRAFFIC_VISITS_PER_HOUR:-30}
+      CONCURRENCY: ${TRAFFIC_CONCURRENCY:-2}
+    # Browsers need more shared memory than Docker's default, and a proper init to reap their processes.
+    shm_size: "1gb"
+    init: true
+    # Hard memory ceiling for this container. On the 2 GB host the long-lived browsers once grew until the
+    # host ran out of RAM and the kernel OOM-killed processes across the box, taking the site offline. With a
+    # limit, a runaway is confined to this container: it alone is OOM-killed and restarted (below), while the
+    # app, the infra agent and the host keep running. Pair this with the browser recycling in traffic/simulate.js.
+    mem_limit: ${TRAFFIC_MEM_LIMIT:-1g}
+    logging: *logging
+    restart: unless-stopped

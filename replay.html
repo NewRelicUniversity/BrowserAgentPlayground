@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ===================================================================
+     NEW RELIC BROWSER SNIPPET
+     Same snippet as index.html. Session replay is already on here with
+     New Relic's default privacy settings: everything masked. Nothing in
+     this snippet unmasks anything, that's done per-element in the body
+     below, with nr-unmask/nr-block/nr-ignore.
+     =================================================================== -->
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="demo-identity.js"></script>
+<script src="site.js"></script>
+<script src="nr-init.js"></script>
+<!-- NR:SNIPPET -->
+<script src="nr-config.js"></script>
+<script src="nr-agent.js"></script>
+<!-- /NR:SNIPPET -->
+
+<title>Browser Session Replay Demo | New Relic</title>
+<link rel="icon" href="favicons/favicon.ico" sizes="48x48">
+<link rel="icon" href="favicons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="favicons/apple-touch-icon.png" sizes="180x180">
+<meta name="theme-color" content="#080F11">
+<meta name="description" content="See how New Relic session replay masks everything by default, force a replay to run with newrelic.recordReplay(), then compare masked, unmasked, blocked and ignored content for yourself.">
+<!-- Link previews (Slack, email, social). The image URL is absolute, so it works from any host. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Browser Agent Playground">
+<meta property="og:title" content="Browser Session Replay Demo | New Relic">
+<meta property="og:description" content="See how New Relic session replay masks everything by default, force a replay to run with newrelic.recordReplay(), then compare masked, unmasked, blocked and ignored content for yourself.">
+<meta property="og:image" content="https://mcaronnewrelic.github.io/BrowserAgentPlayground/images/vitals-hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* ---------- Playground ---------- */
+  .card .field label, .card .field .label { color: var(--black); }
+  .btn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .btn-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* ---------- Feed ---------- */
+  .status.ignored { background: rgba(253,252,240,.08); color: var(--sand); }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 560px) {
+    .btn-grid, .btn-grid.three { grid-template-columns: 1fr 1fr; }
+  }
+  /* "Pause recording" doesn't fit in half of the narrowest phones. */
+  @media (max-width: 420px) {
+    .btn-grid, .btn-grid.three { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <span>Session replay plays back real user interactions, masked by default to protect what users typed and saw.</span>
+    <a href="https://docs.newrelic.com/docs/browser/browser-monitoring/browser-pro-features/session-replay/get-started/" target="_blank" rel="noopener">Read the docs</a>
+  </div>
+</div>
+
+<script>Demo.header()</script>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">New Relic session replay</div>
+        <h1 class="display" style="margin-top:18px">Everything's<br>asterisks.</h1>
+        <p class="lede">By default, a session replay shows nothing but asterisks: every word, every input, masked before it ever leaves the browser. This page forces a replay to run, then shows you exactly what stays hidden and what you can choose to reveal.</p>
+        <div class="ctas">
+          <a class="btn" href="#try">Start recording <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="btn secondary" href="#find">Jump to the query</a>
+        </div>
+        <div class="note">
+          <span class="chip" aria-hidden="true">SessionReplay</span>
+          <span>This app samples only 10% of sessions into full replay recording. <code>newrelic.recordReplay()</code> forces this one into full recording regardless, which is what the first button below does.</span>
+        </div>
+      </div>
+      <div class="term" aria-label="Masking, unmasking, blocking and ignoring">
+        <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c">// Masked by default: shows as **** **** in a replay</span>
+&lt;span&gt;Premium Widget&lt;/span&gt;
+
+<span class="c">// Unmasked on purpose</span>
+&lt;span class=<span class="s">"nr-unmask"</span>&gt;Premium Widget&lt;/span&gt;
+
+<span class="c">// Excluded entirely: an empty box, not even asterisks</span>
+&lt;div data-nr-block&gt;...&lt;/div&gt;
+
+<span class="c">// Field stays visible, your typing never does</span>
+&lt;input class=<span class="s">"nr-ignore"</span>&gt;</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WHO ================= -->
+  <section class="who-bar">
+    <div class="wrap">
+      <details class="who" id="who">
+        <script>Demo.whoSummary()</script>
+        <div class="who-body">
+          <p class="muted">Everyone shares one New Relic account, so your activity is tagged as <code>demoUser</code> and <code>demoCode</code> custom attributes (your name is also set as your end-user ID via <code>setUserId()</code>), carried onto whatever gets recorded below.</p>
+          <script>Demo.identityForm()</script>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ================= TRY IT ================= -->
+  <section class="step" id="try">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Try it / See the contrast</div>
+        <h2 class="display" style="margin-top:14px">Force it, then look at it</h2>
+        <p class="muted">This page can't read back whether a replay actually started or what it looks like. Only New Relic's own player can show you that. The activity feed on the right only narrates what was called locally. Click Start recording first, work through the rest, then check the queries below.</p>
+      </div>
+
+      <div class="primer">
+        <div>
+          <div class="tag-row"><div class="tag">You'll learn to</div><span class="chip both">Automatic + your code</span></div>
+          <ul><li>Explain what session replay masks by default.</li><li>Force a replay with <code>recordReplay()</code> and stop it with <code>pauseReplay()</code>.</li><li>Reveal, block or skip specific elements with <code>nr-unmask</code>, <code>nr-block</code> and <code>nr-ignore</code>.</li></ul>
+        </div>
+        <div>
+          <div class="tag-row"><div class="tag">Before you start</div></div>
+          <ul class="needs"><li><span class="chip where-snippet">Snippet: NREUM.init</span><span><code>init.session_replay</code>. This site records 10% of sessions (<code>sampling_rate: 10</code>) plus every session with an error, and masks all text and inputs.</span></li><li><span class="chip where-version">Agent version</span><span><code>recordReplay()</code> needs agent v1.240.0 or later.</span></li></ul>
+        </div>
+      </div>
+
+      <div class="playground">
+        <div class="cards">
+
+          <article class="card wide" aria-labelledby="howTitle">
+            <div class="tag">How replay actually behaves</div>
+            <h3 id="howTitle">Masked by default, recorded by luck, unless you force it</h3>
+            <p><b>Masked by default</b>: every bit of text and every input on this site renders as asterisks in a replay unless explicitly unmasked. This isn't a quirk of this demo, it's New Relic's own recommended default setting. Every replay recorded on this site before this page existed is a wall of asterisks.</p>
+            <p><b>recordReplay() / pauseReplay()</b>: this app only samples 10% of sessions into full recording (<code>sampling_rate: 10</code>). <code>recordReplay()</code> forces this session into full recording regardless of that roll, agent v1.240.0+, which is the only reliable way to guarantee this demo produces something to look at.</p>
+            <p><b>The lead-up problem</b>: this snippet also has <code>preload: false</code>, so a session waiting on an error (<code>error_sampling_rate: 100</code>) isn't buffering anything beforehand. If an error happens, the replay only starts recording from that moment forward, it can't rewind. Calling <code>recordReplay()</code> up front is the only way to capture what led up to whatever you're about to click.</p>
+            <p><b>nr-unmask / nr-block / nr-ignore</b>: three ways to override the default. <code>nr-unmask</code> makes specific text readable again. <code>nr-block</code> excludes an element and its children entirely, an empty box in the replay, not just masked text. <code>nr-ignore</code> keeps an input field visible but never records what you type into it.</p>
+          </article>
+
+          <article class="card" aria-labelledby="recordTitle">
+            <div class="tag">1 · Force it to run</div>
+            <h3 id="recordTitle">recordReplay() / pauseReplay()</h3>
+            <p>Click Start first. It skips the 10% sampling roll for this session. Then try the cards below, then check the queries further down.</p>
+            <div class="btn-grid">
+              <button id="recordBtn" class="btn" type="button">Start recording</button>
+              <button id="pauseBtn" class="btn secondary" type="button">Pause recording</button>
+            </div>
+            <p id="recordStatus">Nothing sent yet.</p>
+          </article>
+
+          <article class="card" aria-labelledby="maskTitle">
+            <div class="tag">2 · Mask vs unmask</div>
+            <h3 id="maskTitle">Same text, two outcomes</h3>
+            <p>Both lines below render identically on this page right now. In a replay, only one of them stays readable.</p>
+            <p>Unmasked (<code>nr-unmask</code>): <b class="nr-unmask">Premium Widget, SKU NR-9821</b></p>
+            <p>Masked (the default, no class at all): <b>Premium Widget, SKU NR-9821</b></p>
+          </article>
+
+          <article class="card" aria-labelledby="ignoreTitle">
+            <div class="tag">3 · Ignored input</div>
+            <h3 id="ignoreTitle">Visible field, invisible value</h3>
+            <p>Type anything below. The field stays visible in the replay. What you type into it never does.</p>
+            <div class="field">
+              <label for="ignoreInput">Card number</label>
+              <input id="ignoreInput" class="input nr-ignore" type="text" placeholder="4242 4242 4242 4242" autocomplete="off">
+            </div>
+          </article>
+
+          <article class="card" aria-labelledby="blockTitle">
+            <div class="tag">4 · Block vs leave it</div>
+            <h3 id="blockTitle">One disappears, one doesn't</h3>
+            <p>Both boxes below look identical right now. In a replay, the blocked one is an empty placeholder: nothing recorded, not even masked text.</p>
+            <div class="row">
+              <div data-nr-block style="flex:1 1 140px;background:var(--black);color:var(--white);border-radius:14px;padding:16px;text-align:center;font:600 13px var(--mono)">Blocked<br><small style="font-weight:500;opacity:.7">data-nr-block</small></div>
+              <div style="flex:1 1 140px;background:var(--black);color:var(--white);border-radius:14px;padding:16px;text-align:center;font:600 13px var(--mono)">Not blocked<br><small style="font-weight:500;opacity:.7">plain div</small></div>
+            </div>
+          </article>
+
+        </div>
+
+        <aside class="feed" aria-labelledby="feedTitle">
+          <div class="feed-head">
+            <div class="top">
+              <h3 id="feedTitle">Local activity</h3>
+              <button id="clearFeed" class="btn ghost-dark small" type="button">Clear</button>
+            </div>
+            <div class="feed-stats" aria-live="polite">
+              <span><b id="statRecord">0</b> start calls</span>
+              <span><b id="statPause">0</b> pause calls</span>
+            </div>
+          </div>
+          <ul class="feed-list" id="feed">
+            <li class="feed-empty" id="feedEmpty">Nothing yet. Click Start recording to the left.</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FIND IT ================= -->
+  <section class="step find" id="find">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Find it / In New Relic</div>
+        <h2 class="display" style="margin-top:14px">Find your replay</h2>
+        <p>This step works differently than the other demo pages. There's no <code>SessionReplay</code> event you can query directly. Replays aren't stored as flat rows, they're a recording you open in a player.</p>
+      </div>
+      <div class="find-grid">
+        <div class="find-step">1 · Query it: find your session</div>
+        <div class="find-card full">
+          <h3>Find your session ID</h3>
+          <ol>
+            <li>Run this to get the <code>session</code> ID tied to your own replay. <code>hasReplay</code> is <code>true</code> only when a replay actually exists for that event.</li>
+            <li>Copy the <code>session</code> value from the result.</li>
+          </ol>
+          <p class="expect"><b>You should see:</b> Your clicks and page actions from sessions that have a replay, each with its <code>session</code> ID.</p>
+          <pre id="nrqlSession"></pre>
+          <div class="actions">
+            <button class="btn green small js-copy" data-copy-target="nrqlSession" type="button">Copy NRQL</button>
+            <a class="btn ghost-dark small" data-entity="browserApp" href="https://one.newrelic.com" target="_blank" rel="noopener">Open New Relic <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="find-step">2 · See it in New Relic</div>
+        <div class="find-card full">
+          <h3>Open the replay itself</h3>
+          <ol>
+            <li>Go to one.newrelic.com, All Capabilities, Browser, and select this app.</li>
+            <li>In the left-hand menu, click Session replay.</li>
+            <li>Find the replay matching your session ID from the query above, and open it.</li>
+          </ol>
+          <p>Watch for the contrast from the cards above: one line of text readable, one line all asterisks, an input field visible but empty of your typing, and a box that's simply gone.</p>
+        </div>
+      </div>
+      <div class="find-step tips-head">3 · Didn't see it?</div>
+      <div class="tips">
+        <div class="tip"><b>Not finding your session?</b>Make sure you clicked "Start recording" first. Without it, this session only had a 10% chance of recording anything at all.</div>
+        <div class="tip"><b>Replay looks empty?</b>Give it a minute or two. Replay data is sent on its own schedule, separate from other events (<a href="install.html#timing">why</a>).</div>
+        <div class="tip"><b>Learn more</b><a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/recordReplay/" target="_blank" rel="noopener">recordReplay()</a> · <a href="https://docs.newrelic.com/docs/browser/browser-monitoring/browser-pro-features/session-replay/configuration/customize-privacy-settings/" target="_blank" rel="noopener">privacy settings</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHECK ================= -->
+  <section class="step" id="check">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Check it / Your understanding</div>
+        <h2 class="display" style="margin-top:14px">Check yourself</h2>
+        <p class="muted">Pick an answer. A wrong pick can be retried.</p>
+      </div>
+      <p class="quiz-note">Each answer is recorded as a <code>DemoQuizAnswer</code> custom event, with your session code like everything else on this site, so we can see which questions trip people up. Only the option you pick is recorded.</p>
+      <div class="quiz">
+        <div class="q" data-qid="replay-default-text">
+          <p class="q-text">With this site's settings, what does the text of a page look like in a replay?</p>
+          <div class="q-options"><button class="q-opt" type="button">Readable, exactly as on screen</button><button class="q-opt" type="button" data-correct>Asterisks, unless you unmask it</button><button class="q-opt" type="button">It isn't recorded at all, only clicks are</button></div>
+          <p class="q-feedback" hidden>All text and inputs are masked before anything leaves the browser. <code>nr-unmask</code> makes specific text readable.</p>
+        </div>
+        <div class="q" data-qid="replay-block-vs-ignore">
+          <p class="q-text">What's the difference between <code>nr-block</code> and <code>nr-ignore</code>?</p>
+          <div class="q-options"><button class="q-opt" type="button">None: <code>nr-ignore</code> is the older name</button><button class="q-opt" type="button"><code>nr-block</code> masks text; <code>nr-ignore</code> removes the element</button><button class="q-opt" type="button" data-correct><code>nr-block</code> leaves the element out; <code>nr-ignore</code> keeps an input but not what you type</button></div>
+          <p class="q-feedback" hidden>A blocked element is an empty box in the replay. An ignored input stays visible, but your typing is never recorded.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>Demo.upNext()</script>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>A sample page for exploring New Relic session replay and its privacy controls.</span>
+    <span>Avoid typing anything sensitive. Data is visible to everyone in the shared account.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- ================= LOGIC (pure functions, tested by backend/page-logic.test.js) ================= -->
+<script>
+/*LOGIC-START*/
+(function (root) {
+  // There's no queryable SessionReplay event. hasReplay is a boolean carried on other
+  // event types (UserAction, PageAction, Log, ...), true only when a replay exists for
+  // that event's session. Every click on this page already generates a UserAction.
+  function buildSessionNrql(code) {
+    return "SELECT timestamp, session, hasReplay\n" +
+           "FROM UserAction, PageAction\n" +
+           "WHERE demoCode = '" + code + "' AND hasReplay = true\n" +
+           "SINCE 1 hour ago\n" +
+           "LIMIT 100";
+  }
+
+  root.ReplayDemo = { buildSessionNrql: buildSessionNrql };
+})(window);
+/*LOGIC-END*/
+</script>
+
+<!-- ================= UI ================= -->
+<script>
+(function () {
+  'use strict';
+
+  var L = window.ReplayDemo;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = window.DemoIdentity.current();
+  var state = { name: ID.name, code: ID.code, stats: { record: 0, pause: 0 } };
+
+  var agent = Demo.agent, safe = Demo.safe, esc = Demo.esc, toast = Demo.toast;
+  function userName() { return state.name || 'anonymous'; }
+
+  // ---- Agent + identity ------------------------------------------------
+  // Runs after every name or code change (Demo.start sets the custom attributes): refreshes this page's queries.
+  function onIdentity() {
+    $('nrqlSession').textContent = L.buildSessionNrql(state.code);
+  }
+
+  // ---- Feed --------------------------------------------------------------
+  function record(via, detail) {
+    var t = Demo.time();
+    Demo.feed.add('<div class="line1"><span>' + t + '</span><span class="via">' + esc(via) + '</span></div>' +
+      '<div class="msg">' + esc(detail) + '</div>');
+    renderStats();
+  }
+  function renderStats() {
+    var s = state.stats;
+    $('statRecord').textContent = s.record; $('statPause').textContent = s.pause;
+  }
+  function clearFeed() {
+    state.stats = { record: 0, pause: 0 };
+    $('feed').innerHTML = '<li class="feed-empty" id="feedEmpty">Feed cleared. Any replay already recording keeps recording.</li>';
+    renderStats();
+  }
+
+  // ---- 1. recordReplay() / pauseReplay() ------------------------------------
+  function onRecordClick() {
+    state.stats.record++;
+    var nr = agent();
+    $('recordStatus').textContent = nr ? 'recordReplay() called just now.' : 'No agent detected. Nothing was sent.';
+    if (nr && typeof nr.recordReplay === 'function') safe(function () { nr.recordReplay(); });
+    record('Start recording button', nr ? 'recordReplay()' : 'skipped (no agent)');
+    toast(nr ? 'Forcing full recording' : 'No agent, nothing sent');
+  }
+  function onPauseClick() {
+    state.stats.pause++;
+    var nr = agent();
+    $('recordStatus').textContent = nr ? 'pauseReplay() called just now.' : 'No agent detected. Nothing was sent.';
+    if (nr && typeof nr.pauseReplay === 'function') safe(function () { nr.pauseReplay(); });
+    record('Pause recording button', nr ? 'pauseReplay()' : 'skipped (no agent)');
+    toast(nr ? 'Recording paused' : 'No agent, nothing sent');
+  }
+
+  // ---- 3. Ignored input: just narrate the first keystroke, no counter ---------
+  var ignoreNoted = false;
+  function onIgnoreInput() {
+    if (ignoreNoted) return;
+    ignoreNoted = true;
+    record('Ignored input', 'You typed into the nr-ignore field. The field will show in the replay; what you typed will not.');
+  }
+
+  // ---- Init ----------------------------------------------------------------
+  function init() {
+    Demo.start({ state: state, onIdentity: onIdentity });
+    $('recordBtn').addEventListener('click', onRecordClick);
+    $('pauseBtn').addEventListener('click', onPauseClick);
+    $('ignoreInput').addEventListener('input', onIgnoreInput);
+    $('clearFeed').addEventListener('click', clearFeed);
+
+    renderStats();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

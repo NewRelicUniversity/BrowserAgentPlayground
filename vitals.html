@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ===================================================================
+     NEW RELIC BROWSER SNIPPET
+     Same Pro+SPA snippet as index.html. Core Web Vitals (LCP, CLS, INP)
+     are reported as PageViewTiming events. Keep the snippet first in
+     <head> so the agent sees the whole page load.
+     =================================================================== -->
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="demo-identity.js"></script>
+<script src="site.js"></script>
+<script src="nr-init.js"></script>
+<!-- NR:SNIPPET -->
+<script src="nr-config.js"></script>
+<script src="nr-agent.js"></script>
+<!-- /NR:SNIPPET -->
+
+<title>Core Web Vitals Demo | New Relic</title>
+<link rel="icon" href="favicons/favicon.ico" sizes="48x48">
+<link rel="icon" href="favicons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="favicons/apple-touch-icon.png" sizes="180x180">
+<meta name="theme-color" content="#080F11">
+<meta name="description" content="Try Core Web Vitals with New Relic: make LCP, CLS and INP good or poor on purpose, watch them live, then find them in your browser data.">
+<!-- Link previews (Slack, email, social). The image URL is absolute, so it works from any host. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Browser Agent Playground">
+<meta property="og:title" content="Core Web Vitals Demo | New Relic">
+<meta property="og:description" content="Try Core Web Vitals with New Relic: make LCP, CLS and INP good or poor on purpose, watch them live, then find them in your browser data.">
+<meta property="og:image" content="https://mcaronnewrelic.github.io/BrowserAgentPlayground/images/vitals-hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- ================= LOGIC (pure functions, tested by backend/page-logic.test.js) ================= -->
+<script>
+/*LOGIC-START*/
+(function (root) {
+  // Google's thresholds: [good upper bound, poor lower bound]. ms except CLS.
+  var THRESHOLDS = { lcp: [2500, 4000], cls: [0.1, 0.25], inp: [200, 500], fcp: [1800, 3000], ttfb: [800, 1800] };
+  function rate(metric, value) {
+    if (value === undefined || value === null || isNaN(value)) return null;
+    var t = THRESHOLDS[metric];
+    return value <= t[0] ? 'good' : (value <= t[1] ? 'needs-improvement' : 'poor');
+  }
+
+  // CLS = largest "session window" of layout shifts: shifts less than 1 s apart,
+  // window at most 5 s long. Shifts within 500 ms of user input don't count.
+  function computeCLS(entries) {
+    var best = 0, cur = 0, winStart = 0, last = 0, open = false;
+    (entries || []).forEach(function (e) {
+      if (e.hadRecentInput) return;
+      if (open && e.startTime - last < 1000 && e.startTime - winStart < 5000) { cur += e.value; }
+      else { cur = e.value; winStart = e.startTime; open = true; }
+      last = e.startTime;
+      if (cur > best) best = cur;
+    });
+    return Math.round(best * 10000) / 10000;
+  }
+
+  // INP = worst interaction latency, skipping one outlier per 50 interactions (about the 98th percentile).
+  function computeINP(entries) {
+    var byId = {};
+    (entries || []).forEach(function (e) {
+      if (!e.interactionId) return;
+      byId[e.interactionId] = Math.max(byId[e.interactionId] || 0, e.duration);
+    });
+    var list = Object.keys(byId).map(function (k) { return byId[k]; }).sort(function (a, b) { return b - a; });
+    if (!list.length) return undefined;
+    return list[Math.min(list.length - 1, Math.floor(list.length / 50))];
+  }
+
+  function parseModes(search) {
+    var p = new URLSearchParams(search || '');
+    var pick = function (v) { return String(v || '').toLowerCase() === 'good' ? 'good' : 'poor'; };
+    var code = window.DemoIdentity.sanitizeCode(p.get('code'));
+    return { lcp: pick(p.get('lcp')), cls: pick(p.get('cls')), code: code || null };
+  }
+  function buildModeQuery(m) {
+    return '?lcp=' + m.lcp + '&cls=' + m.cls + (m.code ? '&code=' + encodeURIComponent(m.code) : '');
+  }
+
+  function formatValue(metric, v) {
+    if (v === undefined || v === null || isNaN(v)) return '–';
+    if (metric === 'cls') return (Math.round(v * 1000) / 1000).toFixed(3);
+    if (v >= 1000) return (Math.round(v / 10) / 100).toFixed(2) + ' s';
+    return Math.round(v) + ' ms';
+  }
+
+  function busyWait(ms) { var end = Date.now() + ms; while (Date.now() < end) { /* block the main thread on purpose */ } }
+
+  function buildMineNrql(code) {
+    return "SELECT timingName, largestContentfulPaint, cumulativeLayoutShift,\n" +
+           "  interactionToNextPaint, interactionTarget, elTag, lcpMode, clsMode\n" +
+           "FROM PageViewTiming\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago LIMIT 100";
+  }
+  function buildCompareNrql() {
+    return "SELECT percentile(largestContentfulPaint, 75) AS 'LCP p75 (s)',\n" +
+           "  percentile(cumulativeLayoutShift, 75) AS 'CLS p75',\n" +
+           "  percentile(interactionToNextPaint, 75) AS 'INP p75 (s)'\n" +
+           "FROM PageViewTiming\n" +
+           "WHERE pageUrl LIKE '%vitals%'\n" +
+           "FACET lcpMode, clsMode\n" +
+           "SINCE 1 day ago";
+  }
+
+  root.VitalsDemo = {
+    THRESHOLDS: THRESHOLDS, rate: rate,
+    computeCLS: computeCLS, computeINP: computeINP, parseModes: parseModes, buildModeQuery: buildModeQuery,
+    formatValue: formatValue, busyWait: busyWait, buildMineNrql: buildMineNrql, buildCompareNrql: buildCompareNrql
+  };
+})(window);
+/*LOGIC-END*/
+</script>
+
+<script>
+/* Decide the modes before the first paint so nothing flashes or shifts by accident. */
+(function () {
+  var m = window.VitalsDemo.parseModes(location.search);
+  window.__modes = m;
+  document.documentElement.setAttribute('data-lcp', m.lcp);
+  document.documentElement.setAttribute('data-cls', m.cls);
+  if (m.lcp === 'good') {
+    var l = document.createElement('link');
+    l.rel = 'preload'; l.as = 'image'; l.href = 'images/vitals-hero.jpg'; l.setAttribute('fetchpriority', 'high');
+    document.head.appendChild(l);
+  }
+})();
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  :root { --ember-2: #FF7F4D; }
+
+  /* ---------- Header + scorecard (sticky together) ---------- */
+  .sticky { position: sticky; top: 0; z-index: 20; }
+  html { scroll-padding-top: calc(var(--sticky-h, 170px) + 16px); }
+  /* The .sticky wrapper keeps the header and scorecard in view together, so the header itself doesn't stick. */
+  header.site { position: static; }
+  .scorecard { background: var(--panel); color: var(--white); border-bottom: 1px solid rgba(253,252,240,.08); }
+  .scorecard .wrap { display: grid; grid-template-columns: repeat(3, 1.2fr) repeat(2, .8fr) auto; gap: 10px; padding-top: 10px; padding-bottom: 10px; align-items: stretch; }
+  .metric { background: var(--black); border-radius: 14px; padding: 8px 14px; display: flex; flex-direction: column; justify-content: center; min-width: 0; height: 62px; border-left: 4px solid var(--gray); }
+  .metric .name { font: 600 11px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--sand); display: flex; justify-content: space-between; gap: 6px; white-space: nowrap; }
+  .metric .val { font: 600 20px/1.25 var(--mono); letter-spacing: 0; white-space: nowrap; }
+  .metric.small .val { font-size: 16px; }
+  .metric.good { border-left-color: var(--green); } .metric.good .val { color: var(--green); }
+  .metric.needs-improvement { border-left-color: var(--ember-1); } .metric.needs-improvement .val { color: var(--ember-1); }
+  .metric.poor { border-left-color: var(--magenta-2); } .metric.poor .val { color: var(--magenta-1); }
+  .metric .state { font: 500 10.5px/1.3 var(--mono); color: var(--gray); }
+  .modes-pill { display: flex; flex-direction: column; justify-content: center; gap: 4px; font: 500 11.5px/1.3 var(--mono); color: var(--sand); white-space: nowrap; padding: 0 4px; }
+  .modes-pill b { color: var(--white); font-weight: 600; }
+  .modes-pill .poor { color: var(--magenta-1); } .modes-pill .good { color: var(--green); }
+
+  /* ---------- Late content slots (CLS lab) ---------- */
+  .promo { background: var(--ember-1); color: var(--black); }
+  .promo .wrap { height: 250px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 24px; }
+  .promo h2 { font-family: var(--display); font-weight: 860; font-stretch: 75%; text-transform: uppercase; font-size: clamp(36px, 5vw, 64px); line-height: .9; margin: 0; letter-spacing: -0.02em; }
+  .promo p { margin: 8px 0 0; font-size: 16px; }
+  .tagline { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; font: 600 11px/1.4 var(--mono); letter-spacing: .05em; text-transform: uppercase; padding: 3px 9px; border-radius: var(--pill); background: var(--black); color: var(--white); }
+  .notice { background: var(--black); color: var(--white); }
+  .notice .wrap { height: 120px; display: flex; align-items: center; gap: 16px; font-size: 17px; font-weight: 600; }
+  .notice .wrap .tagline { background: var(--green); color: var(--black); }
+  .recs { background: var(--white); border-bottom: 1px solid var(--line); }
+  .recs .wrap { height: 140px; display: grid; grid-template-columns: auto repeat(4, 1fr); gap: 14px; align-items: center; }
+  .recs .rec { display: flex; gap: 12px; align-items: center; background: var(--sys-white); border-radius: 14px; padding: 10px; min-width: 0; }
+  .recs .rec i { width: 80px; height: 80px; border-radius: 10px; flex: none; background: linear-gradient(135deg, var(--green-1), var(--green)); }
+  .recs .rec:nth-child(3) i { background: linear-gradient(135deg, var(--blue-1), var(--blue-2)); }
+  .recs .rec:nth-child(4) i { background: linear-gradient(135deg, var(--magenta-1), var(--magenta-2)); }
+  .recs .rec:nth-child(5) i { background: linear-gradient(135deg, var(--ember-1), var(--ember-2)); }
+  .recs .rec span { font-size: 14px; font-weight: 600; line-height: 1.25; }
+  .recs .label { font: 600 12px/1.3 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); max-width: 120px; }
+  /* Poor CLS: the slots take no space until their content "arrives" late. Good CLS: space is reserved up front. */
+  html[data-cls="poor"] .late:not(.arrived) { display: none; }
+  html[data-cls="good"] .late:not(.arrived) .wrap > * { visibility: hidden; }
+  html[data-cls="good"] .late:not(.arrived) { background: var(--sand); }
+
+  /* ---------- Hero (LCP lab) ---------- */
+  .hero-band { position: relative; background: var(--panel); overflow: hidden; height: max(340px, 48vh); }
+  .hero-band img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hero-band .shimmer { position: absolute; inset: 0; background: linear-gradient(100deg, rgba(253,252,240,0) 30%, rgba(253,252,240,.05) 50%, rgba(253,252,240,0) 70%) var(--panel); background-size: 200% 100%; animation: shimmer 1.4s infinite linear; }
+  @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+  .hero-band .copy { position: relative; z-index: 2; color: var(--white); padding-top: 56px; }
+  .hero-band .eyebrow { color: var(--sand); }
+  .hero-band h1 { font-family: var(--display); font-weight: 860; font-stretch: 75%; text-transform: uppercase; letter-spacing: -0.02em; line-height: .86; margin: 16px 0 0; font-size: clamp(56px, 8vw, 116px); }
+  .hero-band .lede { margin: 20px 0 0; max-width: 40ch; font-size: clamp(17px, 1.6vw, 21px); line-height: 1.35; letter-spacing: -0.3px; color: var(--sand); }
+  .hero-band .lcp-chip { position: absolute; right: 24px; bottom: 20px; z-index: 2; }
+  .hero-band .loading { position: absolute; right: 24px; top: 20px; z-index: 2; font: 500 12px/1.3 var(--mono); color: var(--gray); }
+
+  /* ---------- Buttons ---------- */
+  .btn { transition: background .15s ease; }
+
+  /* ---------- Sections ---------- */
+  .step-head { margin-bottom: 32px; }
+  .step-head p { max-width: 66ch; }
+
+  /* ---------- Setup ---------- */
+  .identity { padding: 32px; grid-template-columns: 1fr 1fr 1.5fr; }
+  .field label, .field .label { color: var(--sand); }
+  .input { border: 1px solid rgba(253,252,240,.12); background: var(--panel-2); color: var(--white); }
+  .input::placeholder { color: var(--gray); }
+  .toggles { display: grid; gap: 10px; }
+  .toggle-row { display: grid; grid-template-columns: 54px 1fr; align-items: center; gap: 12px; }
+  .toggle-row .tname { font: 600 13px/1 var(--mono); color: var(--sand); }
+  .toggle-row .seg { justify-self: start; }
+  .seg { display: inline-flex; background: var(--panel-2); border-radius: var(--pill); padding: 4px; gap: 4px; }
+  .seg button { appearance: none; border: 0; background: none; color: var(--sand); font: 600 14px/1 var(--body); padding: 9px 16px; border-radius: var(--pill); cursor: pointer; }
+  .seg button[aria-pressed="true"].good { background: var(--green); color: var(--black); }
+  .seg button[aria-pressed="true"].poor { background: var(--magenta-1); color: var(--black); }
+  .setup-actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .setup-actions .hint { color: var(--sand); font-size: 14px; opacity: .85; margin-left: 6px; }
+  .setup-actions .hint code { color: var(--green); }
+
+  /* ---------- Labs ---------- */
+  .labs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .card { gap: 14px; }
+  .card .tag { display: flex; justify-content: space-between; gap: 8px; }
+  .card .mode-now { font: 600 11px/1.4 var(--mono); padding: 2px 8px; border-radius: var(--pill); }
+  .mode-now.poor { background: var(--magenta-1); } .mode-now.good { background: var(--green); }
+  .facts { background: var(--black); color: var(--sand); border-radius: 16px; padding: 14px 16px; font: 500 12.5px/1.6 var(--mono); display: grid; gap: 4px; }
+  .facts b { color: var(--white); font-weight: 500; }
+  .snippet { padding: 12px 14px; font: 500 12.5px/1.6 var(--mono); white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .snippet .k { color: var(--green); } .snippet .c { color: var(--gray); } .snippet .s { color: var(--blue-1); }
+  .btn-col { display: grid; gap: 10px; }
+  .lab-btn { appearance: none; cursor: pointer; text-align: left; border: 1px solid var(--line); background: var(--sys-white); color: var(--black); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; font: 600 14px/1.25 var(--body); letter-spacing: -0.2px; transition: border-color .15s, background .15s; }
+  .lab-btn:hover { border-color: var(--black); background: #fff; }
+  .lab-btn small { font: 500 12px/1.35 var(--mono); color: var(--ink-2); letter-spacing: 0; }
+  .lab-btn.fix { border-color: var(--green-deep); box-shadow: inset 0 0 0 1px var(--green-deep); }
+  .lab-btn .status-text { font: 600 12px/1.3 var(--mono); color: var(--green-deep); height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+  .log li { display: flex; justify-content: space-between; gap: 10px; background: var(--sys-white); border-radius: 10px; padding: 7px 10px; font: 500 12px/1.4 var(--mono); }
+  .log li .r { font-weight: 600; white-space: nowrap; }
+  .log li .r.good { color: var(--green-deep); } .log li .r.needs-improvement { color: #9a7a00; } .log li .r.poor { color: var(--magenta-2); }
+  .log li.excluded { opacity: .55; }
+  .log .empty { background: none; color: var(--gray); padding: 0; }
+  .feedlist { display: grid; gap: 8px; }
+  .feedlist .item { background: var(--sys-white); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+
+  /* ---------- Find ---------- */
+  .callout { background: rgba(247,211,84,.12); border: 1px solid rgba(247,211,84,.4); color: var(--white); border-radius: 18px; padding: 16px 18px; font-size: 15px; }
+  .callout b { color: var(--ember-1); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 1180px) {
+    .labs { grid-template-columns: 1fr 1fr; }
+    .labs .card:last-child { grid-column: 1 / -1; }
+    .identity .toggles { grid-column: 1 / -1; }
+    .scorecard .wrap { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .modes-pill { display: none; }
+    .recs .wrap { grid-template-columns: repeat(4, 1fr); }
+    .recs .label { display: none; }
+  }
+  @media (max-width: 900px) {
+    .labs, .find-grid, .tips, .identity { grid-template-columns: 1fr; }
+    .labs .card:last-child { grid-column: auto; }
+    .hero-band { height: max(380px, 58vh); }
+    .recs .wrap { grid-template-columns: repeat(2, 1fr); height: 150px; }
+    .recs .rec:nth-child(n+4) { display: none; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding: 0 14px; }
+    /* Phones: logo + badge on the first row, page switcher full width on the second. */
+
+    .scorecard .wrap { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding-top: 6px; padding-bottom: 6px; }
+    .metric { height: 52px; padding: 6px 9px; }
+    .metric.small { display: none; }
+    .metric .val { font-size: 16px; }
+    .metric .state { display: none; }
+    .promo .wrap { height: 200px; grid-template-columns: 1fr; }
+    .notice .wrap { height: 96px; }
+    .promo .btn { display: none; }
+    .hero-band { height: max(340px, 55vh); }
+    .identity, .card, .find-card { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <span>Core Web Vitals are captured automatically by the Pro, Pro+SPA, and Lite browser agent.</span>
+    <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/page-load-timing-resources/pageviewtiming-async-or-dynamic-page-details/" target="_blank" rel="noopener">Read the docs</a>
+  </div>
+</div>
+
+<div class="sticky">
+<script>Demo.header()</script>
+<div class="scorecard" aria-label="Live Core Web Vitals for this page view">
+  <div class="wrap">
+    <div class="metric" id="m-lcp"><span class="name"><span>LCP</span><span class="state" id="s-lcp">waiting</span></span><span class="val" id="v-lcp">–</span></div>
+    <div class="metric" id="m-cls"><span class="name"><span>CLS</span><span class="state" id="s-cls">live</span></span><span class="val" id="v-cls">0.000</span></div>
+    <div class="metric" id="m-inp"><span class="name"><span>INP</span><span class="state" id="s-inp">click something</span></span><span class="val" id="v-inp">–</span></div>
+    <div class="metric small" id="m-fcp"><span class="name"><span>FCP</span></span><span class="val" id="v-fcp">–</span></div>
+    <div class="metric small" id="m-ttfb"><span class="name"><span>TTFB</span></span><span class="val" id="v-ttfb">–</span></div>
+    <div class="modes-pill" aria-live="polite"><span>LCP mode <b id="pill-lcp">poor</b></span><span>CLS mode <b id="pill-cls">poor</b></span></div>
+  </div>
+</div>
+</div>
+
+<!-- CLS lab, part 3: a shipping notice. Poor: inserted at 2.6 s at the very top. -->
+<div class="notice late" id="notice" aria-label="Shipping notice">
+  <div class="wrap"><span class="tagline">Arrived late</span><span>Free shipping on orders over $50, today only.</span></div>
+</div>
+<!-- CLS lab, part 1: a promo banner. Poor: inserted at 1.2 s with no reserved space. -->
+<div class="promo late" id="promo" aria-label="Promotional banner">
+  <div class="wrap">
+    <div>
+      <span class="tagline">Arrived late · watch CLS</span>
+      <h2>Fall sale: 25% off swag</h2>
+      <p>In poor CLS mode this banner shows up 1.2 seconds after load and pushes the whole page down.</p>
+    </div>
+    <a class="btn" href="#lab-cls">Why did the page jump?</a>
+  </div>
+</div>
+<!-- CLS lab, part 2: recommendations. Poor: inserted at 1.9 s (same session window). -->
+<div class="recs late" id="recs" aria-label="Recommended products">
+  <div class="wrap">
+    <span class="label">Recommended for you</span>
+    <div class="rec"><i></i><span>Observability tee</span></div>
+    <div class="rec"><i></i><span>Golden signals mug</span></div>
+    <div class="rec"><i></i><span>Full-stack hoodie</span></div>
+    <div class="rec"><i></i><span>Sticker pack</span></div>
+  </div>
+</div>
+
+<!-- LCP lab: the hero image. Its space is always reserved, so LCP mode never adds layout shift. -->
+<section class="hero-band" aria-label="Hero">
+  <div class="shimmer" id="heroShimmer"></div>
+  <img id="heroImg" alt="" width="2400" height="1000" decoding="async">
+  <span class="loading" id="heroLoading">Loading hero image…</span>
+  <div class="wrap copy">
+    <div class="eyebrow">New Relic Core Web Vitals</div>
+    <h1>Slow by<br>design.</h1>
+    <p class="lede">This page breaks the three Core Web Vitals on purpose. Watch the scorecard above, flip each one to good, and then find your numbers in New Relic.</p>
+  </div>
+  <span class="tagline lcp-chip" id="lcpChip" hidden>Largest contentful paint</span>
+</section>
+<script>
+/* Load the hero right away (good) or after 4.5 s, like a client-rendered hero (poor). */
+(function () {
+  var img = document.getElementById('heroImg');
+  var show = function () {
+    img.onload = function () { document.getElementById('heroShimmer').remove(); document.getElementById('heroLoading').remove(); document.getElementById('lcpChip').hidden = false; };
+    img.src = 'images/vitals-hero.jpg';
+  };
+  if (window.__modes.lcp === 'good') { img.setAttribute('fetchpriority', 'high'); show(); }
+  else setTimeout(show, 4500);
+})();
+</script>
+
+<main>
+  <!-- ================= WHO ================= -->
+  <section class="who-bar">
+    <div class="wrap">
+      <details class="who" id="who">
+        <script>Demo.whoSummary()</script>
+        <div class="who-body">
+          <p class="muted">Everyone shares one New Relic account, so your name and session code are attached to your data as <code>demoUser</code> and <code>demoCode</code> (your name also becomes your end-user ID via <code>setUserId()</code>). Use the code to filter the queries below down to just your own data.</p>
+          <script>Demo.identityForm()</script>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ================= TRY IT ================= -->
+  <section class="step" id="try">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Try it / The labs</div>
+        <h2 class="display" style="margin-top:14px">Feel the difference</h2>
+        <p class="muted">LCP and CLS are decided while the page loads, so changing them reloads the page. Both modes are saved on your data as <code>lcpMode</code> and <code>clsMode</code>. INP depends on your clicks, so it has its own lab. The scorecard in the header updates live.</p>
+      </div>
+
+      <div class="primer">
+        <div>
+          <div class="tag-row"><div class="tag">You'll learn to</div><span class="chip auto">Automatic, no code</span></div>
+          <ul><li>Explain what makes LCP, CLS and INP good or poor.</li><li>Find your vitals in <code>PageViewTiming</code> events and the Browser summary.</li><li>Judge a page the way Google does, by the 75th percentile.</li></ul>
+        </div>
+        <div>
+          <div class="tag-row"><div class="tag">Before you start</div></div>
+          <ul class="needs"><li><span class="chip where-default">On by default</span><span>Core Web Vitals are captured automatically by the Lite, Pro and Pro+SPA agent. Nothing to turn on.</span></li></ul>
+        </div>
+      </div>
+      <div class="identity page-setup">
+        <div class="toggles">
+          <div class="toggle-row"><span class="tname">LCP</span><span class="seg" data-metric="lcp"><button type="button" class="good" data-v="good">Good</button><button type="button" class="poor" data-v="poor">Poor</button></span></div>
+          <div class="toggle-row"><span class="tname">CLS</span><span class="seg" data-metric="cls"><button type="button" class="good" data-v="good">Good</button><button type="button" class="poor" data-v="poor">Poor</button></span></div>
+        </div>
+        <div class="setup-actions">
+          <button class="btn green" id="applyModes" type="button">Reload with these settings</button>
+          <button class="btn ghost-dark small" id="allGood" type="button">All good</button>
+          <button class="btn ghost-dark small" id="allPoor" type="button">All poor</button>
+          <span class="hint">Reloading also sends this view's CLS and INP to New Relic.</span>
+        </div>
+      </div>
+      <div class="labs">
+
+        <article class="card" id="lab-lcp" aria-labelledby="lcpTitle">
+          <div class="tag"><span>Largest Contentful Paint</span><span class="mode-now" id="lcpModeTag">poor</span></div>
+          <h3 id="lcpTitle">The slow hero</h3>
+          <p>LCP is when the biggest thing in the viewport finishes painting, here the hero image. In poor mode JavaScript adds it after 4.5 seconds.</p>
+          <div class="facts" id="lcpFacts"><span>Waiting for the largest paint…</span></div>
+          <pre class="snippet"><span class="c">&lt;!-- The fix: ship it in HTML, fetch it first --&gt;</span>
+&lt;<span class="k">link</span> rel=<span class="s">"preload"</span> as=<span class="s">"image"</span> href=<span class="s">"hero.jpg"</span>
+      fetchpriority=<span class="s">"high"</span>&gt;
+&lt;<span class="k">img</span> src=<span class="s">"hero.jpg"</span> width=<span class="s">"2400"</span> height=<span class="s">"1000"</span>&gt;</pre>
+          <p><b>Tip:</b> LCP stops updating at your first click, so let the hero load first.</p>
+        </article>
+
+        <article class="card" id="lab-cls" aria-labelledby="clsTitle">
+          <div class="tag"><span>Cumulative Layout Shift</span><span class="mode-now" id="clsModeTag">poor</span></div>
+          <h3 id="clsTitle">The jumping page</h3>
+          <p>CLS adds up how far visible content moves on its own. In poor mode a banner, recommendations and a shipping notice arrive late and push the page down. In good mode their space is reserved.</p>
+          <div class="facts" id="clsFacts"><span>No layout shifts yet.</span></div>
+          <p>Shifts within 500 ms of your input do not count. Try both:</p>
+          <div class="btn-col">
+            <button class="lab-btn" id="cls-now" type="button">Load more now<small>Adds items right after your click: excluded</small></button>
+            <button class="lab-btn" id="cls-later" type="button">Load more after 1 s<small>Adds items a second later: counts as a shift</small></button>
+          </div>
+          <div class="feedlist" id="feedList"><div class="item">Order #1042 shipped</div></div>
+          <ul class="log" id="clsLog" aria-label="Layout shift log"><li class="empty">Layout shifts will be listed here.</li></ul>
+        </article>
+
+        <article class="card" id="lab-inp" aria-labelledby="inpTitle">
+          <div class="tag"><span>Interaction to Next Paint</span><span class="mode-now poor">your clicks</span></div>
+          <h3 id="inpTitle">The laggy buttons</h3>
+          <p>INP is how long the page takes to respond after you click, tap or type. Click each button and watch the log.</p>
+          <div class="btn-col">
+            <button class="lab-btn" id="inp-fast" type="button">Add to cart<small>about 20 ms of work</small><span class="status-text"></span></button>
+            <button class="lab-btn" id="inp-filter" type="button">Apply filter<small>350 ms of blocking work</small><span class="status-text"></span></button>
+            <button class="lab-btn" id="inp-recalc" type="button">Recalculate totals<small>800 ms of blocking work</small><span class="status-text"></span></button>
+            <button class="lab-btn fix" id="inp-yield" type="button">Recalculate totals, yielding<small>same 800 ms, but paints first</small><span class="status-text"></span></button>
+          </div>
+          <ul class="log" id="inpLog" aria-label="Interaction log"><li class="empty">Your interactions will be listed here.</li></ul>
+          <pre class="snippet"><span class="c">// The fix: show feedback, then do the heavy work</span>
+button.textContent = <span class="s">'Working…'</span>
+<span class="k">await new</span> Promise(r =&gt; requestAnimationFrame(() =&gt; setTimeout(r)))
+recalculateTotals()</pre>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FIND IT ================= -->
+  <section class="step find" id="find">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Find it / In New Relic</div>
+        <h2 class="display" style="margin-top:14px">Find your vitals</h2>
+        <p>Core Web Vitals land as <code>PageViewTiming</code> events, one per metric (<code>timingName</code> = <code>lcp</code>, <code>cls</code>, <code>inp</code>, and more). Durations are stored in seconds.</p>
+      </div>
+      <div class="callout" style="margin-bottom:20px"><b>CLS and INP are sent when you leave this page view.</b> Switch tabs, reload, or use "Reload with these settings" to send them. LCP is sent after your first interaction or when you leave. <a href="install.html#timing">More on timing</a>.</div>
+      <div class="find-grid">
+        <div class="find-step">1 · See it in New Relic</div>
+        <div class="find-card full">
+          <h3>In the Browser UI</h3>
+          <ol>
+            <li>Open <b>Browser</b>, pick the demo app, and look at the <b>Core Web Vitals</b> charts on its <b>Summary</b>.</li>
+            <li>Open <b>Page views</b> and select <code>vitals.html</code> to see vitals for just this page.</li>
+            <li>For slow interactions, the INP attributes <code>interactionTarget</code>, <code>inputDelay</code>, <code>processingDuration</code> and <code>presentationDelay</code> tell you which element was slow and why.</li>
+          </ol>
+        </div>
+        <div class="find-step">2 · Query it</div>
+        <div class="find-card">
+          <h3>Your page views</h3>
+          <p>Every vital from your visits, with the LCP element and the button that caused your worst INP.</p>
+          <p class="expect"><b>You should see:</b> One row per metric per page view (<code>lcp</code>, <code>cls</code>, <code>inp</code> and others), with <code>lcpMode</code> and <code>clsMode</code> showing the modes you picked.</p>
+          <pre id="nrqlMine"></pre>
+          <div class="actions">
+            <button class="btn green small js-copy" data-copy-target="nrqlMine" type="button">Copy NRQL</button>
+            <a class="btn ghost-dark small" data-entity="browserApp" href="https://one.newrelic.com" target="_blank" rel="noopener">Open New Relic <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="find-card">
+          <h3>Good vs poor, everyone</h3>
+          <p>The 75th percentile is how Google judges a page. Compare every visitor's runs by mode.</p>
+          <p class="expect"><b>You should see:</b> One row per mode combination. Poor modes score well above the good ones.</p>
+          <pre id="nrqlCompare"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlCompare" type="button">Copy NRQL</button></div>
+        </div>
+      </div>
+      <div class="find-step tips-head">3 · Didn't see it?</div>
+      <div class="tips">
+        <div class="tip"><b>Why do my numbers differ a little?</b>The scorecard is this page's own live measurement. New Relic uses Google's web-vitals library, which finalizes values at slightly different moments.</div>
+        <div class="tip"><b>Learn more</b><a href="https://web.dev/articles/vitals" target="_blank" rel="noopener">Web Vitals</a> · <a href="https://web.dev/articles/optimize-inp" target="_blank" rel="noopener">Optimize INP</a> · <a href="https://web.dev/articles/optimize-cls" target="_blank" rel="noopener">Optimize CLS</a> · To time your own moments instead, see <a href="measures.html">marks &amp; measures</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHECK ================= -->
+  <section class="step" id="check">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Check it / Your understanding</div>
+        <h2 class="display" style="margin-top:14px">Check yourself</h2>
+        <p class="muted">Pick an answer. A wrong pick can be retried.</p>
+      </div>
+      <p class="quiz-note">Each answer is recorded as a <code>DemoQuizAnswer</code> custom event, with your session code like everything else on this site, so we can see which questions trip people up. Only the option you pick is recorded.</p>
+      <div class="quiz">
+        <div class="q" data-qid="vitals-timing">
+          <p class="q-text">You just loaded this page. Why might its CLS and INP not show up in New Relic yet?</p>
+          <div class="q-options"><button class="q-opt" type="button" data-correct>They are sent when you leave the page view</button><button class="q-opt" type="button">They need 10 page views before they are reported</button><button class="q-opt" type="button">They are only measured in poor mode</button></div>
+          <p class="q-feedback" hidden>CLS and INP are final only once you leave, so they go out when you switch tabs, reload or navigate away.</p>
+        </div>
+        <div class="q" data-qid="vitals-p75">
+          <p class="q-text">Which number does Google use to judge whether a page passes Core Web Vitals?</p>
+          <div class="q-options"><button class="q-opt" type="button">The average of all visits</button><button class="q-opt" type="button" data-correct>The 75th percentile of visits</button><button class="q-opt" type="button">The single worst visit</button></div>
+          <p class="q-feedback" hidden>That's why the "Good vs poor, everyone" query uses <code>percentile(..., 75)</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>Demo.upNext()</script>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>A sample page for exploring Core Web Vitals with New Relic browser monitoring.</span>
+    <span>Avoid typing anything sensitive. Data is visible to everyone in the shared account.</span>
+  </div>
+</footer>
+
+<!-- ================= UI ================= -->
+<script>
+(function () {
+  'use strict';
+  var L = window.VitalsDemo, M = window.__modes;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = window.DemoIdentity.current();
+
+  // Anchored sections land below the sticky header and scorecard, however tall they are at this width.
+  var sticky = document.querySelector('.sticky');
+  function syncStickyHeight() { document.documentElement.style.setProperty('--sticky-h', sticky.offsetHeight + 'px'); }
+  syncStickyHeight();
+  if (window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(sticky); else window.addEventListener('resize', syncStickyHeight);
+  var state = {
+    code: M.code || ID.code, name: ID.name, pending: { lcp: M.lcp, cls: M.cls },
+    lcp: undefined, lcpFinal: false, lcpEl: null, shifts: [], events: [], inp: undefined
+  };
+
+  var safe = Demo.safe, esc = Demo.esc;
+
+  // ---- Agent + identity ---------------------------------------------------
+  // Runs after every name or code change (Demo.start sets demoUser and demoCode). Tags this view's
+  // modes, and keeps the code in the address bar so the mode reloads below keep it too.
+  function onIdentity(nr) {
+    if (nr) {
+      safe(function () { nr.setCustomAttribute('lcpMode', M.lcp); });
+      safe(function () { nr.setCustomAttribute('clsMode', M.cls); });
+    }
+    try { history.replaceState(null, '', location.pathname + L.buildModeQuery({ lcp: M.lcp, cls: M.cls, code: state.code }) + location.hash); } catch (e) {}
+    $('nrqlMine').textContent = L.buildMineNrql(state.code);
+  }
+
+  // ---- Scorecard -----------------------------------------------------------
+  function setMetric(metric, value, stateText) {
+    var el = $('m-' + metric), r = L.rate(metric, value);
+    el.classList.remove('good', 'needs-improvement', 'poor');
+    if (r) el.classList.add(r);
+    $('v-' + metric).textContent = L.formatValue(metric, value);
+    if (stateText !== undefined && $('s-' + metric)) $('s-' + metric).textContent = stateText;
+  }
+  function describe(el) {
+    if (el && el.nodeType !== 1) el = el.parentElement; // layout-shift sources can be text nodes
+    if (!el || !el.tagName) return 'unknown element';
+    var s = el.tagName.toLowerCase();
+    if (el.id) s += '#' + el.id;
+    else if (el.className && typeof el.className === 'string') s += '.' + el.className.split(/\s+/)[0];
+    return s;
+  }
+
+  // ---- Observers (same browser APIs the agent's web-vitals library uses) ----
+  function observe(type, cb, opts) {
+    try {
+      var po = new PerformanceObserver(function (list) { cb(list.getEntries()); });
+      po.observe(Object.assign({ type: type, buffered: true }, opts || {}));
+      return po;
+    } catch (e) { return null; }
+  }
+  function finalizeLcp() {
+    if (state.lcpFinal) return;
+    state.lcpFinal = true;
+    setMetric('lcp', state.lcp, state.lcp === undefined ? 'no paint' : 'final');
+    renderLcpFacts();
+  }
+  function renderLcpFacts() {
+    var r = L.rate('lcp', state.lcp);
+    $('lcpFacts').innerHTML =
+      '<span>LCP <b>' + L.formatValue('lcp', state.lcp) + '</b> · ' + (r ? r.replace('-', ' ') : 'waiting') + (state.lcpFinal ? ' · final' : ' · still watching') + '</span>' +
+      '<span>Element <b>' + esc(describe(state.lcpEl)) + '</b></span>' +
+      '<span>Mode <b>' + M.lcp + '</b> ' + (M.lcp === 'poor' ? '(hero added at 4.5 s)' : '(hero preloaded)') + '</span>';
+  }
+  function renderCls() {
+    var cls = L.computeCLS(state.shifts);
+    setMetric('cls', cls);
+    var counted = state.shifts.filter(function (s) { return !s.hadRecentInput; });
+    $('clsFacts').innerHTML = '<span>CLS <b>' + L.formatValue('cls', cls) + '</b> · ' + (L.rate('cls', cls) || '').replace('-', ' ') + '</span>' +
+      '<span>Shifts counted <b>' + counted.length + '</b> · excluded after input <b>' + (state.shifts.length - counted.length) + '</b></span>' +
+      '<span>Mode <b>' + M.cls + '</b> ' + (M.cls === 'poor' ? '(no reserved space)' : '(space reserved)') + '</span>';
+    var log = $('clsLog');
+    if (!state.shifts.some(function (s) { return s.value >= 0.001; })) return;
+    log.innerHTML = state.shifts.filter(function (s) { return s.value >= 0.001; }).reverse().map(function (s) {
+      var src = s.sources && s.sources[0] && s.sources[0].node ? describe(s.sources[0].node) : 'page content';
+      return '<li class="' + (s.hadRecentInput ? 'excluded' : '') + '"><span>' + (s.startTime / 1000).toFixed(2) + ' s · ' + esc(src) + '</span><span class="r">' +
+        (s.hadRecentInput ? 'excluded' : '+' + s.value.toFixed(3)) + '</span></li>';
+    }).join('');
+  }
+  // One click = several event entries (pointerdown, pointerup, click) sharing an interactionId.
+  // Group them: latency = longest entry, time = earliest entry, target = the control that was used.
+  var inpRows = {}, recentInputs = [];
+  ['pointerdown', 'keydown'].forEach(function (t) {
+    addEventListener(t, function (ev) {
+      var el = ev.target && ev.target.closest ? ev.target.closest('button, a, input, select, [id]') : null;
+      recentInputs.push({ ts: ev.timeStamp, el: el });
+      if (recentInputs.length > 50) recentInputs.shift();
+    }, { capture: true, passive: true });
+  });
+  function controlFor(entry) {
+    var el = entry.target && entry.target.nodeType !== 1 ? entry.target.parentElement : entry.target;
+    if (el && el.closest) el = el.closest('button, a, input, select, [id]') || el;
+    if (el) return el;
+    var best = null; // the entry's target can be null; fall back to the input we saw at about the same time
+    recentInputs.forEach(function (r) { if (Math.abs(r.ts - entry.startTime) < 60 && (!best || Math.abs(r.ts - entry.startTime) < Math.abs(best.ts - entry.startTime))) best = r; });
+    return best ? best.el : null;
+  }
+  function renderInp(newEntries) {
+    state.inp = L.computeINP(state.events);
+    if (state.inp !== undefined) setMetric('inp', state.inp, 'worst so far');
+    (newEntries || []).forEach(function (e) {
+      if (!e.interactionId) return;
+      var row = inpRows[e.interactionId] || (inpRows[e.interactionId] = { duration: 0, t: e.startTime, target: null });
+      row.duration = Math.max(row.duration, e.duration);
+      row.t = Math.min(row.t, e.startTime);
+      if (!row.target) row.target = controlFor(e);
+    });
+    var rows = Object.keys(inpRows).map(function (k) { return inpRows[k]; }).sort(function (a, b) { return b.t - a.t; });
+    if (!rows.length) return;
+    $('inpLog').innerHTML = rows.slice(0, 30).map(function (r) {
+      var rt = L.rate('inp', r.duration);
+      return '<li><span>' + (r.t / 1000).toFixed(1) + ' s · ' + esc(describe(r.target)) + '</span><span class="r ' + rt + '">' + L.formatValue('inp', r.duration) + '</span></li>';
+    }).join('');
+  }
+
+  observe('largest-contentful-paint', function (entries) {
+    if (state.lcpFinal) return;
+    var last = entries[entries.length - 1];
+    state.lcp = last.startTime; state.lcpEl = last.element;
+    setMetric('lcp', state.lcp, 'watching');
+    renderLcpFacts();
+  });
+  ['keydown', 'pointerdown'].forEach(function (t) { addEventListener(t, finalizeLcp, { once: true, capture: true }); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') finalizeLcp(); });
+  observe('layout-shift', function (entries) { state.shifts = state.shifts.concat(entries); renderCls(); });
+  observe('event', function (entries) { state.events = state.events.concat(entries); renderInp(entries); }, { durationThreshold: 16 });
+  observe('paint', function (entries) { entries.forEach(function (e) { if (e.name === 'first-contentful-paint') setMetric('fcp', e.startTime); }); });
+  safe(function () { var nav = performance.getEntriesByType('navigation')[0]; if (nav) setMetric('ttfb', nav.responseStart); });
+
+  // ---- CLS lab: late content ----------------------------------------------
+  function arrive(id) { $(id).classList.add('arrived'); }
+  setTimeout(function () { arrive('promo'); }, 1200);
+  setTimeout(function () { arrive('recs'); }, 1900);
+  setTimeout(function () { arrive('notice'); }, 2600);
+  var feedN = 1043;
+  function addItems() {
+    var list = $('feedList');
+    for (var i = 0; i < 3; i++) {
+      var d = document.createElement('div'); d.className = 'item'; d.textContent = 'Order #' + (feedN++) + ' shipped';
+      list.insertBefore(d, list.firstChild);
+    }
+  }
+  $('cls-now').addEventListener('click', addItems);
+  $('cls-later').addEventListener('click', function () { setTimeout(addItems, 1000); });
+
+  // ---- INP lab -----------------------------------------------------------------
+  function statusOf(btn, text) { btn.querySelector('.status-text').textContent = text; }
+  function blocking(ms) {
+    return function (e) {
+      var btn = e.currentTarget;
+      L.busyWait(ms); // the click handler hogs the main thread, so the next paint waits
+      statusOf(btn, 'Done (' + ms + ' ms of work)');
+    };
+  }
+  $('inp-fast').addEventListener('click', blocking(20));
+  $('inp-filter').addEventListener('click', blocking(350));
+  $('inp-recalc').addEventListener('click', blocking(800));
+  $('inp-yield').addEventListener('click', function (e) {
+    var btn = e.currentTarget;
+    statusOf(btn, 'Working…'); // give feedback first
+    requestAnimationFrame(function () {
+      setTimeout(function () { L.busyWait(800); statusOf(btn, 'Done (800 ms of work, after the paint)'); }, 0);
+    });
+  });
+
+  // ---- Setup controls --------------------------------------------------------
+  function renderToggles() {
+    Array.prototype.forEach.call(document.querySelectorAll('.seg'), function (seg) {
+      var metric = seg.dataset.metric;
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(state.pending[metric] === b.dataset.v)); });
+    });
+  }
+  function reloadWith(modes) {
+    var code = window.DemoIdentity.sanitizeCode($('sessionCode').value) || state.code;
+    location.href = location.pathname + L.buildModeQuery({ lcp: modes.lcp, cls: modes.cls, code: code });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+    b.addEventListener('click', function () { state.pending[b.parentNode.dataset.metric] = b.dataset.v; renderToggles(); });
+  });
+  $('applyModes').addEventListener('click', function () { reloadWith(state.pending); });
+  $('allGood').addEventListener('click', function () { reloadWith({ lcp: 'good', cls: 'good' }); });
+  $('allPoor').addEventListener('click', function () { reloadWith({ lcp: 'poor', cls: 'poor' }); });
+
+  // ---- Init ------------------------------------------------------------------
+  ['lcp', 'cls'].forEach(function (m) {
+    $('pill-' + m).textContent = M[m]; $('pill-' + m).className = M[m];
+    $(m + 'ModeTag').textContent = M[m]; $(m + 'ModeTag').className = 'mode-now ' + M[m];
+  });
+  $('nrqlCompare').textContent = L.buildCompareNrql();
+  renderToggles();
+  Demo.start({ state: state, onIdentity: onIdentity });
+  renderLcpFacts();
+})();
+</script>
+</body>
+</html>

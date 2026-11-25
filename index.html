@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ===================================================================
+     NEW RELIC BROWSER SNIPPET
+     Same snippet as logs.html. This page is a plain landing page, no
+     demo buttons here, just the agent loading so the header's "agent
+     detected" badge works like it does on every other page.
+     =================================================================== -->
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="demo-identity.js"></script>
+<script src="site.js"></script>
+<script src="nr-init.js"></script>
+<!-- NR:SNIPPET -->
+<script src="nr-config.js"></script>
+<script src="nr-agent.js"></script>
+<!-- /NR:SNIPPET -->
+
+<title>Browser Agent Demos | New Relic</title>
+<link rel="icon" href="favicons/favicon.ico" sizes="48x48">
+<link rel="icon" href="favicons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="favicons/apple-touch-icon.png" sizes="180x180">
+<meta name="theme-color" content="#080F11">
+<meta name="description" content="A self-serve tour of the New Relic browser agent: logs, errors, tracing, WebSockets, Core Web Vitals, marks and measures, frustration signals, custom events, session replay and manual SPA control, each one in its own demo page.">
+<!-- Link previews (Slack, email, social). The image URL is absolute, so it works from any host. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Browser Agent Playground">
+<meta property="og:title" content="Browser Agent Demos | New Relic">
+<meta property="og:description" content="A self-serve tour of the New Relic browser agent: logs, errors, tracing, WebSockets, Core Web Vitals, marks and measures, frustration signals, custom events, session replay and manual SPA control, each one in its own demo page.">
+<meta property="og:image" content="https://mcaronnewrelic.github.io/BrowserAgentPlayground/images/vitals-hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* ---------- Buttons ---------- */
+  .btn { transition: transform .12s ease, background .15s ease, box-shadow .15s ease; }
+
+  /* ---------- Hero ---------- */
+
+  .hero-note { margin-top: 28px; max-width: 520px; font-size: 15px; color: var(--ink-2); }
+  .start-form { margin-top: 32px; display: grid; gap: 16px; max-width: 520px; }
+  .start-form label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .start-form .input {
+    width: 100%; font: 500 16px/1.3 var(--body); letter-spacing: -0.2px;
+    padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--white); color: var(--black);
+  }
+  .start-form .input:focus { outline: none; border-color: var(--green-deep); box-shadow: 0 0 0 3px rgba(28,231,131,.3); }
+  .start-form .input[aria-invalid="true"] { border-color: var(--magenta-2); }
+  .start-form .code-row { display: flex; gap: 10px; }
+  .start-form .code-row .input { font-family: var(--mono); font-size: 22px; font-weight: 600; letter-spacing: .04em; color: var(--black); }
+  .start-form .form-error { margin: 0; font-size: 14px; font-weight: 600; color: var(--magenta-2); }
+  .start-form .ctas { margin-top: 0; }
+  .term .c { color: var(--gray); }
+  .term .s { color: var(--blue-1); }
+  .term pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+
+  /* ---------- Sections ---------- */
+  .step-head p { max-width: 60ch; }
+
+  /* ---------- Identity ---------- */
+  .identity { grid-template-columns: 1fr 1fr auto; gap: 28px; }
+  .field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .input, select.input, textarea.input {
+    width: 100%; font: 500 16px/1.3 var(--body); letter-spacing: -0.2px;
+    padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line);
+    background: var(--white); color: var(--black);
+  }
+  .identity .hint { opacity: .8; }
+
+  /* ---------- Playground ---------- */
+  .card .tag-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .card .when { color: var(--black); }
+
+  /* ---------- Learning path: numbered stages, each with its pages ---------- */
+  .path { list-style: none; margin: 0; padding: 0; display: grid; gap: 36px; }
+  .stage { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .stage-head { display: flex; gap: 14px; align-items: flex-start; position: sticky; top: 100px; }
+  .stage-num {
+    flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--black); color: var(--green);
+    display: grid; place-items: center; font: 700 17px/1 var(--mono);
+  }
+  .stage-head h3 { font-size: 20px; }
+  .stage-head p { margin: 6px 0 0; font-size: 14.5px; color: var(--ink-2); }
+  .cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Narrower screens: each stage's heading sits above its cards. */
+  @media (max-width: 1180px) {
+    .stage { grid-template-columns: 1fr; gap: 16px; }
+    .stage-head { position: static; }
+  }
+  .card > .btn { margin-top: auto; }
+  /* Bonus exercise, off the numbered path. */
+  .bonus-row { margin-top: 40px; display: grid; gap: 14px; }
+  .bonus-row .bonus-eyebrow { font: 500 13px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--green); }
+  .bonus-row .card { border-style: dashed; }
+  .snippet { white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .snippet .s { color: var(--blue-1); }
+  .snippet .c { color: var(--gray); }
+  .card .field label { color: var(--black); }
+
+  .chip { letter-spacing: .04em; text-transform: uppercase; }
+  .chip.error { background: var(--magenta-1); }
+  .chip.trace { background: transparent; box-shadow: inset 0 0 0 1px var(--gray); }
+  .entry .chip.trace, .scenario .chip.trace { color: var(--white); }
+  .keep { font: 500 11px/1.4 var(--mono); color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; }
+  .keep::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gray); }
+  .keep.no { opacity: .7; }
+
+  /* ---------- Feed ---------- */
+  .status { margin-left: auto; font-size: 10.5px; }
+
+  /* ---------- Find ---------- */
+
+  footer a { color: var(--sand); }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 900px) {
+    .hero .wrap, .find-grid, .tips { grid-template-columns: 1fr; }
+    .cards, .cards.three { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <span><span data-count="pages">Eleven</span> demo pages and <span data-count="investigations">four</span> guided investigations, one shared account. Click around and watch your own data show up.</span>
+    <a href="https://docs.newrelic.com/docs/browser/" target="_blank" rel="noopener">Read the docs</a>
+  </div>
+</div>
+
+<script>Demo.header()</script>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">New Relic browser agent</div>
+        <h1 class="display" style="margin-top:18px">Click it.<br>Then find it.</h1>
+        <p class="lede"><span data-count="pages">Eleven</span> small demo pages, one shared New Relic account. Each page triggers a specific browser agent feature on purpose, then shows you exactly where to find the data it produced.</p>
+        <form class="start-form" id="startForm" novalidate>
+          <div>
+            <label for="userName">Your name or handle</label>
+            <input id="userName" class="input" type="text" maxlength="40" required autocomplete="nickname" placeholder="e.g. Ada from Platform" aria-describedby="nameError">
+            <p class="form-error" id="nameError" role="alert" hidden>Enter a name to continue. It becomes your end-user ID in New Relic.</p>
+          </div>
+          <div>
+            <label for="sessionCode">Your session code</label>
+            <div class="code-row">
+              <input id="sessionCode" class="input" type="text" maxlength="16" spellcheck="false">
+              <button id="newCode" class="btn secondary small" type="button" title="Generate a new code">New code</button>
+            </div>
+          </div>
+          <div class="ctas">
+            <button class="btn" type="submit"><span id="startLabel">Start with Install</span> <span class="arrow" aria-hidden="true">→</span></button>
+            <a class="btn secondary" href="#pages">See the learning path</a>
+          </div>
+        </form>
+        <div class="hero-note">
+          <span class="chip" aria-hidden="true">Shared account</span>
+          <span>Everyone who visits gets a random session code, so every page lets you filter down to just your own data, even while sharing the account with everyone else who has clicked through.</span>
+        </div>
+      </div>
+      <div class="term" aria-label="How each demo page works">
+        <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c">// Every page, the same shape</span>
+1. Click a button
+2. The browser agent sends real telemetry
+3. Run the NRQL the page gives you
+4. See your own data come back</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PAGES ================= -->
+  <!-- The stages and their order match PAGES in site.js, which drives the header and each page's Up next link. -->
+  <section class="step" id="pages">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">The learning path</div>
+        <h2 class="display" style="margin-top:14px"><span data-count="stages">Six</span> stages, <span data-count="pages">eleven</span> pages</h2>
+        <p class="muted">Each stage builds on the one before, and each page ends with a link to the next. Every page also stands on its own, so you can jump straight to the one you need.</p>
+      </div>
+      <ol class="path">
+
+        <li class="stage">
+          <div class="stage-head"><span class="stage-num">1</span><div><h3>Start here</h3><p>How the agent gets on a page, and how to read the queries every page ends with.</p></div></div>
+          <div class="cards">
+            <article class="card wide" aria-labelledby="pInstall">
+              <div class="tag-row"><div class="tag">Install</div><span class="chip both">Start here</span></div>
+              <h3 id="pInstall">How the agent gets on the page</h3>
+              <p>Copy/paste snippet, injection by an APM agent, or the npm package: which to use when, how to check an install is working, and how to read the NRQL queries every other page ends with.</p>
+              <a class="btn secondary small" href="install.html">Go to Install <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </li>
+
+        <li class="stage">
+          <div class="stage-head"><span class="stage-num">2</span><div><h3>What you get for free</h3><p>Load the agent and these arrive with no code. Learn what each one measures and where to find it.</p></div></div>
+          <div class="cards three">
+            <article class="card" aria-labelledby="pVitals">
+              <div class="tag-row"><div class="tag">Vitals</div><span class="chip auto">Automatic, no code</span></div>
+              <h3 id="pVitals">Core Web Vitals, good or bad, on purpose</h3>
+              <p>Make LCP, CLS and INP good or poor on demand, and watch a live scorecard react to your own choices.</p>
+              <a class="btn secondary small" href="vitals.html">Go to Vitals <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+            <article class="card" aria-labelledby="pErrors">
+              <div class="tag-row"><div class="tag">Errors</div><span class="chip both">Automatic + your code</span></div>
+              <h3 id="pErrors">Errors become triaged, grouped data</h3>
+              <p>Uncaught errors and promise rejections, <code>noticeError()</code>, <code>setErrorHandler()</code> for ignoring and grouping, <code>addRelease()</code>, and how errors relate to ERROR-level logs.</p>
+              <a class="btn secondary small" href="errors.html">Go to Errors <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+            <article class="card" aria-labelledby="pFrustration">
+              <div class="tag-row"><div class="tag">Frustration</div><span class="chip auto">Automatic, no code</span></div>
+              <h3 id="pFrustration">The frustration signals most teams never see</h3>
+              <p>Trigger rage clicks, dead clicks and error clicks on purpose, and learn the exact timing thresholds that trip each one.</p>
+              <p class="when"><b>Use it when</b> you want to know where users get stuck.</p>
+              <a class="btn secondary small" href="frustration.html">Go to Frustration <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </li>
+
+        <li class="stage">
+          <div class="stage-head"><span class="stage-num">3</span><div><h3>What you add</h3><p>Your own logs, events and timings, each sent with a line of code.</p></div></div>
+          <div class="cards three">
+            <article class="card" aria-labelledby="pLogs">
+              <div class="tag-row"><div class="tag">Logs</div><span class="chip both">Automatic + your code</span></div>
+              <h3 id="pLogs">Console calls become New Relic logs</h3>
+              <p>Console auto-logging, <code>newrelic.log()</code>, <code>newrelic.wrapLogger()</code>, and how log verbosity filters what actually gets sent.</p>
+              <a class="btn secondary small" href="logs.html">Go to Logs <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+            <article class="card" aria-labelledby="pEvents">
+              <div class="tag-row"><div class="tag">Events</div><span class="chip manual">You add the code</span></div>
+              <h3 id="pEvents">Three ways to record "something happened"</h3>
+              <p><code>addPageAction()</code>, <code>recordCustomEvent()</code>, and the automatic <code>BrowserInteraction</code> event, which despite its name doesn't record every interaction.</p>
+              <p class="when"><b>Use it when</b> you want to count something your own way, like a button click or a checkout step.</p>
+              <a class="btn secondary small" href="events.html">Go to Events <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+            <article class="card" aria-labelledby="pMeasures">
+              <div class="tag-row"><div class="tag">Measures</div><span class="chip both">Automatic + your code</span></div>
+              <h3 id="pMeasures">Time the moments only you know matter</h3>
+              <p><code>performance.mark()</code>, <code>performance.measure()</code> and <code>newrelic.measure()</code>, and the <code>BrowserPerformance</code> events each one becomes, including marks you never made yourself.</p>
+              <a class="btn secondary small" href="measures.html">Go to Measures <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </li>
+
+        <li class="stage">
+          <div class="stage-head"><span class="stage-num">4</span><div><h3>Follow the network</h3><p>Requests and connections leaving the page, and where they go next.</p></div></div>
+          <div class="cards">
+            <article class="card" aria-labelledby="pTracing">
+              <div class="tag-row"><div class="tag">Tracing</div><span class="chip auto">Automatic, needs a backend</span></div>
+              <h3 id="pTracing">Follow one click across the network</h3>
+              <p>The exact <code>traceparent</code>, <code>tracestate</code> and <code>newrelic</code> headers the agent adds, carrying one click into backend services on the same distributed trace.</p>
+              <a class="btn secondary small" href="tracing.html">Go to Tracing <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+            <article class="card" aria-labelledby="pWebSockets">
+              <div class="tag-row"><div class="tag">WebSockets</div><span class="chip auto">Automatic, one setting</span></div>
+              <h3 id="pWebSockets">One open socket, one event</h3>
+              <p>Turn on WebSocket tracking, then open, use and close sockets on purpose: clean closes, custom close codes, failed connections, handler errors and sockets left open when the page unloads.</p>
+              <a class="btn secondary small" href="websockets.html">Go to WebSockets <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </li>
+
+        <li class="stage">
+          <div class="stage-head"><span class="stage-num">5</span><div><h3>Single-page apps</h3><p>When the URL changes without a page load. Builds on the <code>BrowserInteraction</code> lesson from Events.</p></div></div>
+          <div class="cards">
+            <article class="card wide" aria-labelledby="pSpa">
+              <div class="tag-row"><div class="tag">SPA</div><span class="chip manual">You add the code</span></div>
+              <h3 id="pSpa">Take control yourself, instead of the heuristic</h3>
+              <p>Force a <code>BrowserInteraction</code> to save, suppress one on purpose, and name a route by hand, with the manual <code>interaction()</code> API.</p>
+              <a class="btn secondary small" href="spa.html">Go to SPA <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </li>
+
+        <li class="stage">
+          <div class="stage-head"><span class="stage-num">6</span><div><h3>Privacy</h3><p>What a session recording keeps, what it hides, and how you decide.</p></div></div>
+          <div class="cards">
+            <article class="card wide" aria-labelledby="pReplay">
+              <div class="tag-row"><div class="tag">Replay</div><span class="chip both">Automatic + your code</span></div>
+              <h3 id="pReplay">Everything's masked, until you say otherwise</h3>
+              <p>Force a session replay to record on demand, then see exactly what stays masked by default versus what you can deliberately unmask, block or ignore.</p>
+              <a class="btn secondary small" href="replay.html">Go to Replay <span class="arrow" aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </li>
+
+      </ol>
+
+      <!-- Bonus exercise: standalone, not one of the numbered stages (not in PAGES in site.js). -->
+      <div class="bonus-row">
+        <div class="bonus-eyebrow">Bonus · off the path</div>
+        <article class="card wide" aria-labelledby="pBonus">
+          <div class="tag-row"><div class="tag">Investigation</div><span class="chip">Infrastructure · root cause</span></div>
+          <h3 id="pBonus">Who's stealing the CPU?</h3>
+          <p>A guided root-cause investigation, separate from the browser-agent tour. An endpoint keeps slowing down with no code change; you follow the data from the slow request down to the process hogging the host. Each checkpoint reveals the next, so you prove the cause step by step.</p>
+          <a class="btn secondary small" href="noisy-neighbor.html">Start the investigation <span class="arrow" aria-hidden="true">→</span></a>
+        </article>
+        <article class="card wide" aria-labelledby="pBonusTrace">
+          <div class="tag-row"><div class="tag">Investigation</div><span class="chip">Distributed tracing · root cause</span></div>
+          <h3 id="pBonusTrace">It's not checkout</h3>
+          <p>Checkout is slow and failing, but the checkout team changed nothing. Follow one distributed trace through its service calls to find the downstream dependency that's really at fault, one checkpoint at a time.</p>
+          <a class="btn secondary small" href="downstream-culprit.html">Start the investigation <span class="arrow" aria-hidden="true">→</span></a>
+        </article>
+        <article class="card wide" aria-labelledby="pBonusN1">
+          <div class="tag-row"><div class="tag">Investigation</div><span class="chip">Distributed tracing · performance</span></div>
+          <h3 id="pBonusN1">One page, a dozen calls</h3>
+          <p>A catalog page is slow and hammers the product service. Open one trace, spot the row of identical calls, and recognize the N+1 pattern, then name the fix, one checkpoint at a time.</p>
+          <a class="btn secondary small" href="n-plus-one.html">Start the investigation <span class="arrow" aria-hidden="true">→</span></a>
+        </article>
+        <article class="card wide" aria-labelledby="pBonusDeploy">
+          <div class="tag-row"><div class="tag">Investigation</div><span class="chip">Change tracking · root cause</span></div>
+          <h3 id="pBonusDeploy">A deploy broke it</h3>
+          <p>A feature starts throwing errors in bursts. Use change tracking to line the spikes up with deployment markers, confirm the new error in Errors Inbox, and pin it to the release that caused it.</p>
+          <a class="btn secondary small" href="bad-deploy.html">Start the investigation <span class="arrow" aria-hidden="true">→</span></a>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>A home base for the New Relic browser agent demo pages.</span>
+    <span>Avoid typing anything sensitive. Data is visible to everyone in the shared account.</span>
+  </div>
+</footer>
+
+<!-- ================= UI ================= -->
+<!-- This page is a landing page, not a demo. No identity step, no telemetry
+     of its own, just enough script to flip the header's agent-detected badge. -->
+<script>
+(function () {
+  'use strict';
+  var $ = Demo.$;
+  var ID = window.DemoIdentity;
+  var nextPage = ID.safeNext(new URLSearchParams(location.search).get('next'));
+  // The label the header's page switcher uses for that page.
+  function pageLabel(page) {
+    var file = page.replace(/\?.*$/, '');
+    var match = Demo.PAGES.filter(function (p) { return p.file === file; })[0];
+    return match ? match.label : file.replace(/\.html$/, '');
+  }
+  function initIdentityForm() {
+    var identity = ID.current();
+    $('userName').value = identity.name;
+    $('sessionCode').value = identity.code;
+    $('startLabel').textContent = 'Start with ' + pageLabel(nextPage);
+    $('newCode').addEventListener('click', function () { $('sessionCode').value = ID.save({ code: ID.makeCode() }).code; });
+    $('sessionCode').addEventListener('change', function (e) { e.target.value = ID.save({ code: e.target.value }).code; });
+    $('userName').addEventListener('input', function () { $('userName').removeAttribute('aria-invalid'); $('nameError').hidden = true; });
+    $('startForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = $('userName').value.trim();
+      if (!name) { $('userName').setAttribute('aria-invalid', 'true'); $('nameError').hidden = false; $('userName').focus(); return; }
+      ID.save({ name: name, code: $('sessionCode').value });
+      location.href = nextPage;
+    });
+  }
+  function init() {
+    Demo.renderAgent();
+    initIdentityForm();
+    [1000, 3000, 6000].forEach(function (ms) { setTimeout(Demo.renderAgent, ms); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

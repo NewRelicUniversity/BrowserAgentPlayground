@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ===================================================================
+     NEW RELIC BROWSER SNIPPET
+     Same snippet as index.html. PageAction and recordCustomEvent are
+     plain API calls, nothing here turns them on. BrowserInteraction
+     needs no snippet change either; it just needs a route (URL) change
+     followed by a DOM update after a click, which this page proves out.
+     =================================================================== -->
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="demo-identity.js"></script>
+<script src="site.js"></script>
+<script src="nr-init.js"></script>
+<!-- NR:SNIPPET -->
+<script src="nr-config.js"></script>
+<script src="nr-agent.js"></script>
+<!-- /NR:SNIPPET -->
+
+<title>Browser Events Demo | New Relic</title>
+<link rel="icon" href="favicons/favicon.ico" sizes="48x48">
+<link rel="icon" href="favicons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="favicons/apple-touch-icon.png" sizes="180x180">
+<meta name="theme-color" content="#080F11">
+<meta name="description" content="Compare newrelic.addPageAction(), newrelic.recordCustomEvent() and the automatic BrowserInteraction event: trigger each one on purpose, then find your own events in a shared account.">
+<!-- Link previews (Slack, email, social). The image URL is absolute, so it works from any host. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Browser Agent Playground">
+<meta property="og:title" content="Browser Events Demo | New Relic">
+<meta property="og:description" content="Compare newrelic.addPageAction(), newrelic.recordCustomEvent() and the automatic BrowserInteraction event: trigger each one on purpose, then find your own events in a shared account.">
+<meta property="og:image" content="https://mcaronnewrelic.github.io/BrowserAgentPlayground/images/vitals-hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* ---------- Playground ---------- */
+  .card .field label, .card .field .label { color: var(--black); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <span>PageAction, custom events and BrowserInteraction are three different ways the browser agent records "something happened."</span>
+    <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/addpageaction/" target="_blank" rel="noopener">Read the docs</a>
+  </div>
+</div>
+
+<script>Demo.header()</script>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">New Relic browser events</div>
+        <h1 class="display" style="margin-top:18px">Something<br>happened.</h1>
+        <p class="lede">Three ways to tell New Relic. One you call explicitly and it always lands as <code>PageAction</code>. One you call explicitly and you pick the name. One fires on its own, but not for the reason most people assume.</p>
+        <div class="ctas">
+          <a class="btn" href="#try">Start comparing <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="btn secondary" href="#find">Jump to the query</a>
+        </div>
+        <div class="note">
+          <span class="chip" aria-hidden="true">BrowserInteraction</span>
+          <span>Common assumption: <code>BrowserInteraction</code> records every interaction. Despite its name, it doesn't. It is only saved when a click is followed by a URL (route) change, then a DOM update after that change. The buttons below prove it both ways.</span>
+        </div>
+      </div>
+      <div class="term" aria-label="How each one fires">
+        <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="c">// PageAction: always this event type, call it any time</span>
+newrelic.<span class="k">addPageAction</span>(<span class="s">'Signed up'</span>, { plan: <span class="s">'pro'</span> })
+<span class="c">// -&gt; PageAction, agent v593+</span>
+
+<span class="c">// Custom event: you choose the event type</span>
+newrelic.<span class="k">recordCustomEvent</span>(<span class="s">'DemoAction'</span>, { plan: <span class="s">'pro'</span> })
+<span class="c">// -&gt; DemoAction, agent v1.277.0+</span>
+
+<span class="c">// BrowserInteraction: automatic, but only for this</span>
+history.pushState({}, <span class="s">''</span>, <span class="s">'#route'</span>) <span class="c">// 1. URL changes</span>
+el.textContent = <span class="s">'done'</span> <span class="c">// 2. then DOM changes</span>
+<span class="c">// -&gt; BrowserInteraction, category: Route change</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WHO ================= -->
+  <section class="who-bar">
+    <div class="wrap">
+      <details class="who" id="who">
+        <script>Demo.whoSummary()</script>
+        <div class="who-body">
+          <p class="muted">Everyone shares one New Relic account, so your clicks are tagged as <code>demoUser</code> and <code>demoCode</code> custom attributes (your name is also set as your end-user ID via <code>setUserId()</code>), carried onto every <code>PageAction</code>, <code>DemoAction</code> and <code>BrowserInteraction</code> event you generate below.</p>
+          <script>Demo.identityForm()</script>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ================= TRY IT ================= -->
+  <section class="step" id="try">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Try it / Trigger one</div>
+        <h2 class="display" style="margin-top:14px">Pick your event</h2>
+        <p class="muted">Four buttons, four outcomes. The agent decides what actually gets saved, and this page has no way to read that verdict back. The activity feed on the right only shows what you did locally. Give it a minute or two, then check the queries below for what New Relic actually recorded.</p>
+      </div>
+
+      <div class="primer">
+        <div>
+          <div class="tag-row"><div class="tag">You'll learn to</div><span class="chip manual">You add the code</span></div>
+          <ul><li>Choose between <code>addPageAction()</code> and <code>recordCustomEvent()</code>.</li><li>Explain when the agent records a <code>BrowserInteraction</code>, and when it doesn't.</li><li>Find events that have no page of their own in the New Relic UI.</li></ul>
+        </div>
+        <div>
+          <div class="tag-row"><div class="tag">Before you start</div></div>
+          <ul class="needs"><li><span class="chip where-default">On by default</span><span><code>addPageAction()</code>: <code>init.page_action.enabled</code> is on by default.</span></li><li><span class="chip where-version">Agent version</span><span><code>recordCustomEvent()</code> needs agent v1.277.0 or later.</span></li><li><span class="chip where-version">Agent version</span><span><code>BrowserInteraction</code> needs the Pro+SPA agent, which this site uses.</span></li></ul>
+        </div>
+      </div>
+
+      <div class="playground">
+        <div class="cards">
+
+          <article class="card wide" aria-labelledby="howTitle">
+            <div class="tag">How each one fires</div>
+            <h3 id="howTitle">Explicit, explicit, automatic-but-not-how-you'd-guess</h3>
+            <p><b>addPageAction(name, attrs)</b>: fully manual, works for anything. Always lands as the fixed event type <code>PageAction</code>. Needs agent v593+ (effectively always available). Free attributes you didn't ask for: <code>actionName</code>, <code>timeSinceLoad</code>, <code>referrerUrl</code>, <code>browserWidth</code>, <code>browserHeight</code>. Has its own on/off switch, <code>init.page_action.enabled</code> (on by default).</p>
+            <p><b>recordCustomEvent(eventType, attrs)</b>: also fully manual, but you name the event type instead of always getting <code>PageAction</code>. Needs agent v1.277.0+, genuinely newer. No bonus attributes, just what you send. Not gated by <code>page_action.enabled</code>. New Relic's own guidance: keep it to roughly 5 event types per account, not one per action.</p>
+            <p><b>BrowserInteraction</b>: the only one of the three that fires on its own. Despite its name, it doesn't record every interaction. The agent requires a click, <i>then a URL (route) change, then a DOM update after that change, in that order</i>. A click that changes no route never becomes its own <code>BrowserInteraction</code>, no matter how many times you click. The two buttons below prove both halves of that.</p>
+          </article>
+
+          <article class="card" aria-labelledby="paTitle">
+            <div class="tag">1 · PageAction</div>
+            <h3 id="paTitle">addPageAction()</h3>
+            <p>Purely client-side. No request, no route change: just a button that matters to you.</p>
+            <button id="pageActionBtn" class="btn" type="button">Add to cart</button>
+            <p id="pageActionStatus">Nothing sent yet.</p>
+          </article>
+
+          <article class="card" aria-labelledby="customTitle">
+            <div class="tag">2 · Custom event</div>
+            <h3 id="customTitle">recordCustomEvent()</h3>
+            <p>Same idea, but under an event type you chose: <code class="js-event-type">DemoAction</code>, not <code>PageAction</code>.</p>
+            <button id="customEventBtn" class="btn" type="button">Add to cart</button>
+            <p id="customEventStatus">Nothing sent yet.</p>
+          </article>
+
+          <article class="card" aria-labelledby="ajaxOnlyTitle">
+            <div class="tag">3 · BrowserInteraction, half the recipe</div>
+            <h3 id="ajaxOnlyTitle">AJAX only, no route change</h3>
+            <p>Fetches <code>data/products.json</code> and shows the result. No matter how many times you click this, it will not become its own <code>BrowserInteraction</code>. Watch the queries below.</p>
+            <button id="ajaxOnlyBtn" class="btn secondary" type="button">Load catalog</button>
+            <p id="ajaxOnlyStatus">Nothing sent yet.</p>
+          </article>
+
+          <article class="card" aria-labelledby="routeChangeTitle">
+            <div class="tag">4 · BrowserInteraction, the full recipe</div>
+            <h3 id="routeChangeTitle">Route change, then update</h3>
+            <p>Changes the URL fragment first, then updates this card. URL change before DOM change is what the agent is actually watching for.</p>
+            <button id="routeChangeBtn" class="btn secondary" type="button">Go to a new step</button>
+            <p id="routeChangeStatus">Nothing sent yet.</p>
+          </article>
+
+        </div>
+
+        <aside class="feed" aria-labelledby="feedTitle">
+          <div class="feed-head">
+            <div class="top">
+              <h3 id="feedTitle">Local activity</h3>
+              <button id="clearFeed" class="btn ghost-dark small" type="button">Clear</button>
+            </div>
+            <div class="feed-stats" aria-live="polite">
+              <span><b id="statPageAction">0</b> PageAction</span>
+              <span><b id="statCustom">0</b> custom</span>
+              <span><b id="statAjaxOnly">0</b> AJAX-only</span>
+              <span><b id="statRouteChange">0</b> route change</span>
+            </div>
+          </div>
+          <ul class="feed-list" id="feed">
+            <li class="feed-empty" id="feedEmpty">Nothing yet. Click one of the buttons to the left.</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FIND IT ================= -->
+  <section class="step find" id="find">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Find it / In New Relic</div>
+        <h2 class="display" style="margin-top:14px">Find your events</h2>
+        <p>Data arrives in batches, usually within a minute (<a href="install.html#timing">why</a>). Everything below is already filled in with your code, <code class="js-code" style="color:var(--green)">NR-XXXX</code>.</p>
+      </div>
+      <div class="find-grid">
+        <div class="find-step">1 · See it in New Relic</div>
+        <div class="find-card full">
+          <h3>In the Browser UI</h3>
+          <ol>
+            <li>Go to <b>Browser</b>, open the demo app, then <b>Browser interactions</b> or <b>Page views</b> to see <code>BrowserInteraction</code> rows for real route changes across the whole app.</li>
+            <li>There's no dedicated UI page for <code>PageAction</code> or custom events. The query builder and dashboards are how you see them.</li>
+            <li>Filter any of the above by <code id="uiFilter">demoCode = NR-XXXX</code> to see only your events.</li>
+          </ol>
+        </div>
+        <div class="find-step">2 · Query it</div>
+        <div class="find-card full">
+          <h3>All three side by side</h3>
+          <ol>
+            <li>Open the query builder in New Relic and run this. If a route didn't change, no <code>BrowserInteraction</code> row shows up here at all. That's expected, not a bug.</li>
+          </ol>
+          <p class="expect"><b>You should see:</b> A count for <code>PageAction</code> and your custom event type. <code>BrowserInteraction</code> appears only if you used the route-change button.</p>
+          <pre id="nrqlCompare"></pre>
+          <div class="actions">
+            <button class="btn green small js-copy" data-copy-target="nrqlCompare" type="button">Copy NRQL</button>
+            <a class="btn ghost-dark small" data-entity="browserApp" href="https://one.newrelic.com" target="_blank" rel="noopener">Open New Relic <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="find-card">
+          <h3>Just your PageAction events</h3>
+          <p><code>actionName</code>, <code>timeSinceLoad</code> and <code>referrerUrl</code> came free; you never set them.</p>
+          <p class="expect"><b>You should see:</b> One row per click on the PageAction button, with <code>actionName</code> "Added to cart" and the free attributes filled in.</p>
+          <pre id="nrqlPageAction"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlPageAction" type="button">Copy NRQL</button></div>
+        </div>
+        <div class="find-card">
+          <h3>Just your custom events</h3>
+          <p>Same shape as PageAction, but under the <code class="js-event-type">DemoAction</code> event type you chose, with no bonus attributes.</p>
+          <p class="expect"><b>You should see:</b> One row per click on the custom event button, with only the attributes you sent.</p>
+          <pre id="nrqlCustom"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlCustom" type="button">Copy NRQL</button></div>
+        </div>
+        <div class="find-card">
+          <h3>Just your BrowserInteraction events</h3>
+          <p>Only the "route change, then update" button produces one of these. The "AJAX only" button never does.</p>
+          <p class="expect"><b>You should see:</b> One row per route-change click, with <code>category</code> "Route change". None from the AJAX-only button.</p>
+          <pre id="nrqlBrowserInteraction"></pre>
+          <div class="actions"><button class="btn green small js-copy" data-copy-target="nrqlBrowserInteraction" type="button">Copy NRQL</button></div>
+        </div>
+      </div>
+      <div class="find-step tips-head">3 · Didn't see it?</div>
+      <div class="tips">
+        <div class="tip"><b>Not seeing a BrowserInteraction from the AJAX-only button?</b>That's correct, not broken. It needs a route change first. The AJAX-only button deliberately never gives it one.</div>
+        <div class="tip"><b>Not seeing anything at all?</b>Make sure the agent badge up top says "detected." Then give it a minute: data arrives in batches (<a href="install.html#timing">why</a>).</div>
+        <div class="tip"><b>Learn more</b><a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/addpageaction/" target="_blank" rel="noopener">addPageAction()</a> · <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/recordCustomEvent/" target="_blank" rel="noopener">recordCustomEvent()</a> · <a href="https://docs.newrelic.com/docs/browser/new-relic-browser/browser-apis/interaction/" target="_blank" rel="noopener">interaction()</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHECK ================= -->
+  <section class="step" id="check">
+    <div class="wrap">
+      <div class="step-head">
+        <div class="eyebrow">Check it / Your understanding</div>
+        <h2 class="display" style="margin-top:14px">Check yourself</h2>
+        <p class="muted">Pick an answer. A wrong pick can be retried.</p>
+      </div>
+      <p class="quiz-note">Each answer is recorded as a <code>DemoQuizAnswer</code> custom event, with your session code like everything else on this site, so we can see which questions trip people up. Only the option you pick is recorded.</p>
+      <div class="quiz">
+        <div class="q" data-qid="events-ajax-only">
+          <p class="q-text">You click the AJAX-only button ten times. How many <code>BrowserInteraction</code> events of its own does that create?</p>
+          <div class="q-options"><button class="q-opt" type="button">Ten, one per click</button><button class="q-opt" type="button">One, for the first click</button><button class="q-opt" type="button" data-correct>None</button></div>
+          <p class="q-feedback" hidden>The agent needs a route (URL) change followed by a DOM update. An AJAX call alone never qualifies.</p>
+        </div>
+        <div class="q" data-qid="events-custom-type">
+          <p class="q-text">When would you pick <code>recordCustomEvent()</code> over <code>addPageAction()</code>?</p>
+          <div class="q-options"><button class="q-opt" type="button" data-correct>When you want your own event type instead of <code>PageAction</code></button><button class="q-opt" type="button">When you want free attributes like <code>timeSinceLoad</code></button><button class="q-opt" type="button">When you want a separate event type for every action</button></div>
+          <p class="q-feedback" hidden>New Relic's guidance is to keep it to roughly five custom event types per account, not one per action.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>Demo.upNext()</script>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>A sample page for comparing PageAction, custom events and automatic BrowserInteraction tracking.</span>
+    <span>Avoid typing anything sensitive. Data is visible to everyone in the shared account.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ================= LOGIC (pure functions, tested by backend/page-logic.test.js) ================= -->
+<script>
+/*LOGIC-START*/
+(function (root) {
+  // The event type name chosen for the recordCustomEvent() demo. Not a reserved name
+  // (PageAction, UserAction, BrowserPerformance). Those are silently rejected by the agent.
+  var CUSTOM_EVENT_TYPE = 'DemoAction';
+
+  function buildCompareNrql(code) {
+    return "SELECT count(*)\n" +
+           "FROM PageAction, " + CUSTOM_EVENT_TYPE + ", BrowserInteraction\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "FACET eventType()\n" +
+           "SINCE 1 hour ago";
+  }
+  function buildPageActionNrql(code) {
+    return "SELECT timestamp, actionName, timeSinceLoad, referrerUrl, demoCode\n" +
+           "FROM PageAction\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago\n" +
+           "LIMIT 100";
+  }
+  function buildCustomNrql(code) {
+    return "SELECT *\n" +
+           "FROM " + CUSTOM_EVENT_TYPE + "\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago\n" +
+           "LIMIT 100";
+  }
+  function buildBrowserInteractionNrql(code) {
+    return "SELECT timestamp, category, trigger, actionText, ajaxCount, duration, targetUrl\n" +
+           "FROM BrowserInteraction\n" +
+           "WHERE demoCode = '" + code + "'\n" +
+           "SINCE 1 hour ago\n" +
+           "LIMIT 100";
+  }
+
+  root.ActionsDemo = {
+    CUSTOM_EVENT_TYPE: CUSTOM_EVENT_TYPE,
+    buildCompareNrql: buildCompareNrql, buildPageActionNrql: buildPageActionNrql,
+    buildCustomNrql: buildCustomNrql, buildBrowserInteractionNrql: buildBrowserInteractionNrql
+  };
+})(window);
+/*LOGIC-END*/
+</script>
+
+<!-- ================= UI ================= -->
+<script>
+(function () {
+  'use strict';
+
+  var L = window.ActionsDemo;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = window.DemoIdentity.current();
+  var state = { name: ID.name, code: ID.code, stats: { pageAction: 0, custom: 0, ajaxOnly: 0, routeChange: 0 } };
+
+  var agent = Demo.agent, safe = Demo.safe, esc = Demo.esc, toast = Demo.toast;
+  function userName() { return state.name || 'anonymous'; }
+
+  // ---- Agent + identity ------------------------------------------------
+  // Runs after every name or code change (Demo.start sets the custom attributes): refreshes this page's queries.
+  function onIdentity() {
+    Array.prototype.forEach.call(document.querySelectorAll('.js-event-type'), function (el) { el.textContent = L.CUSTOM_EVENT_TYPE; });
+    $('nrqlCompare').textContent = L.buildCompareNrql(state.code);
+    $('nrqlPageAction').textContent = L.buildPageActionNrql(state.code);
+    $('nrqlCustom').textContent = L.buildCustomNrql(state.code);
+    $('nrqlBrowserInteraction').textContent = L.buildBrowserInteractionNrql(state.code);
+    $('uiFilter').textContent = 'demoCode = ' + state.code;
+  }
+
+  // ---- Feed --------------------------------------------------------------
+  function record(via, detail) {
+    var t = Demo.time();
+    Demo.feed.add('<div class="line1"><span>' + t + '</span><span class="via">' + esc(via) + '</span></div>' +
+      '<div class="msg">' + esc(detail) + '</div>');
+    renderStats();
+  }
+  function renderStats() {
+    var s = state.stats;
+    $('statPageAction').textContent = s.pageAction; $('statCustom').textContent = s.custom;
+    $('statAjaxOnly').textContent = s.ajaxOnly; $('statRouteChange').textContent = s.routeChange;
+  }
+  function clearFeed() {
+    state.stats = { pageAction: 0, custom: 0, ajaxOnly: 0, routeChange: 0 };
+    Demo.feed.clear();
+    renderStats();
+  }
+
+  // ---- 1. PageAction -------------------------------------------------------
+  function onPageActionClick() {
+    state.stats.pageAction++;
+    var nr = agent();
+    var attrs = { demoUser: userName(), demoCode: state.code, item: 'demo-widget' };
+    $('pageActionStatus').textContent = nr ? 'addPageAction() called just now.' : 'No agent detected. Nothing was sent.';
+    if (nr && typeof nr.addPageAction === 'function') {
+      safe(function () { nr.addPageAction('Added to cart', attrs); });
+    }
+    record('PageAction button', nr ? "addPageAction('Added to cart', " + JSON.stringify(attrs) + ')' : 'skipped (no agent)');
+    toast(nr ? 'PageAction sent' : 'No agent, nothing sent');
+  }
+
+  // ---- 2. Custom event -------------------------------------------------------
+  function onCustomEventClick() {
+    state.stats.custom++;
+    var nr = agent();
+    var attrs = { demoUser: userName(), demoCode: state.code, item: 'demo-widget' };
+    $('customEventStatus').textContent = nr ? 'recordCustomEvent() called just now.' : 'No agent detected. Nothing was sent.';
+    if (nr && typeof nr.recordCustomEvent === 'function') {
+      safe(function () { nr.recordCustomEvent(L.CUSTOM_EVENT_TYPE, attrs); });
+    }
+    record('Custom event button', nr ? "recordCustomEvent('" + L.CUSTOM_EVENT_TYPE + "', " + JSON.stringify(attrs) + ')' : 'skipped (no agent)');
+    toast(nr ? L.CUSTOM_EVENT_TYPE + ' sent' : 'No agent, nothing sent');
+  }
+
+  // ---- 3. BrowserInteraction, half the recipe: AJAX only, no route change ------
+  // No matter how many times this fires, it will not become its own BrowserInteraction --
+  // the agent requires a URL change before it will consider an interaction reportable.
+  function onAjaxOnlyClick() {
+    state.stats.ajaxOnly++;
+    $('ajaxOnlyStatus').textContent = 'Loading…';
+    fetch('data/products.json', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var count = (data && data.data && data.data.products) ? data.data.products.length : 0;
+        $('ajaxOnlyStatus').textContent = 'Loaded ' + count + ' products. Still no route change. This will not show up as a BrowserInteraction.';
+        record('AJAX-only button', 'fetch(data/products.json) -> ' + count + ' products, URL unchanged');
+        toast('Loaded ' + count + ' products, no route change');
+      })
+      .catch(function (err) {
+        $('ajaxOnlyStatus').textContent = 'Fetch failed: ' + err.message;
+        record('AJAX-only button', 'fetch failed: ' + err.message);
+      });
+  }
+
+  // ---- 4. BrowserInteraction, the full recipe: route change, then update -------
+  // history.pushState is directly wrapped by the agent, so this is an unambiguous route
+  // change (unlike a plain anchor-click hash navigation, which this page deliberately
+  // avoids relying on). The DOM update happens right after, which is the order the
+  // agent requires: URL change, then DOM change.
+  var routeChangeCount = 0;
+  function onRouteChangeClick() {
+    state.stats.routeChange++;
+    routeChangeCount++;
+    var newUrl = location.pathname + location.search + '#actions-demo-' + Date.now();
+    safe(function () { history.pushState(null, '', newUrl); });
+    $('routeChangeStatus').textContent = 'Route changed to ' + newUrl.split('#')[1] + ' (step ' + routeChangeCount + '). This should show up as a BrowserInteraction with category "Route change".';
+    record('Route-change button', 'history.pushState -> #' + newUrl.split('#')[1] + ', then DOM update');
+    toast('Route changed, check the queries below in a minute');
+  }
+
+  // ---- Init ----------------------------------------------------------------
+  function init() {
+    Demo.start({ state: state, onIdentity: onIdentity });
+    $('pageActionBtn').addEventListener('click', onPageActionClick);
+    $('customEventBtn').addEventListener('click', onCustomEventClick);
+    $('ajaxOnlyBtn').addEventListener('click', onAjaxOnlyClick);
+    $('routeChangeBtn').addEventListener('click', onRouteChangeClick);
+    $('clearFeed').addEventListener('click', clearFeed);
+
+    renderStats();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
