@@ -10,7 +10,7 @@ const { createPages } = require('./pages.js');
 const { attachWebSocket } = require('./websocket.js');
 const { createDashboardDeeplink } = require('./dashboard-deeplink.js');
 
-const DEFAULT_ORIGINS = ['https://mcaronnewrelic.github.io', 'http://localhost:8080', 'http://127.0.0.1:8080'];
+const DEFAULT_ORIGINS = ['https://newrelicuniversity.github.io', 'http://localhost:8080', 'http://127.0.0.1:8080'];
 const ALLOW_HEADERS = 'newrelic, traceparent, tracestate, content-type';
 const MAX_SLOW_MS = 5000;
 // /api/recommendations computes "personalized" picks with a fixed amount of real CPU work (not a sleep),

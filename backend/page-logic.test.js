@@ -240,7 +240,7 @@ test('websockets: only ws and wss servers are accepted from the address', () => 
 
 test('websockets: ?ws= wins, then the page\'s own backend, then browser.nru.to if it answers /ws, then the echo server', () => {
   const { pickServer, DEFAULT_SERVER } = L['websockets.html'];
-  const here = { protocol: 'https:', host: 'mcaronnewrelic.github.io' };
+  const here = { protocol: 'https:', host: 'newrelicuniversity.github.io' };
   assert.deepStrictEqual(pickServer({ wsParam: 'wss://mine.example/ws', servedByBackend: true, location: here, remoteWebSocket: true }),
     { server: 'wss://mine.example/ws', onBackend: false, source: 'param' });
   assert.deepStrictEqual(pickServer({ wsParam: null, servedByBackend: true, location: { protocol: 'http:', host: 'localhost:3000' }, remoteWebSocket: true }),

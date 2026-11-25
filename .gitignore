@@ -11,3 +11,6 @@ terraform.tfvars
 *.auto.tfvars
 crash.log
 tfplan
+
+__pycache__/
+*.pyc

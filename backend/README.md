@@ -35,7 +35,7 @@ The same line is printed to stdout as JSON for local runs. Responses also carry 
 | --- | --- | --- |
 | `NEW_RELIC_LICENSE_KEY` | none | Your **ingest license key** (not the browser key). Never commit it. |
 | `NEW_RELIC_APP_NAME` | `Browser Agent Playground API` | APM app name. browser.nru.to sets `Browser Agent Playground`. |
-| `ALLOWED_ORIGINS` | `https://mcaronnewrelic.github.io,http://localhost:8080,http://127.0.0.1:8080` | Comma-separated origins allowed to call the API |
+| `ALLOWED_ORIGINS` | `https://newrelicuniversity.github.io,http://localhost:8080,http://127.0.0.1:8080` | Comma-separated origins allowed to call the API |
 | `PORT` | `3000` | |
 | `SITE_ROOT` | none (set to `/app/site` in the Docker image) | Folder of demo pages to serve. When set, the server also injects the browser agent into each page and requires `NEW_RELIC_LICENSE_KEY`. |
 | `FAULT_WINDOW_MINUTES` | `15` | The downstream-culprit exercise: for this many minutes at the top of each hour (UTC), payment is slow and sometimes fails. 15 of every 60 means it's always in a default 1-hour query range. `0` turns it off. |
@@ -52,7 +52,7 @@ npm install
 NEW_RELIC_LICENSE_KEY=your_ingest_key node server.js
 ```
 
-Then open `https://mcaronnewrelic.github.io/BrowserAgentPlayground/tracing.html?backend=http://localhost:3000`. Chrome allows a public page to call `localhost`, but it may first ask for permission to access devices on your local network.
+Then open `https://newrelicuniversity.github.io/BrowserAgentPlayground/tracing.html?backend=http://localhost:3000`. Chrome allows a public page to call `localhost`, but it may first ask for permission to access devices on your local network.
 
 ## Deploy to Render (example)
 
@@ -71,7 +71,7 @@ When the pages come from somewhere else, such as GitHub Pages or a local static 
 
 1. **The page points at the backend.** `CONFIG.backendUrl` in `tracing.html`. To try another backend without editing, add `?backend=https://your-backend` to the page's address; `?backend=none` forces browser-only mode.
 2. **The browser agent may add trace headers for it.** The agent adds `traceparent`, `tracestate` and `newrelic` only to same-origin requests and to origins in `distributed_tracing.allowed_origins`. `tracing.html` sets that list itself, near the top, so add any new backend there. (The **Cross-origin resource sharing (CORS)** list in the browser app's **Application settings** does the same job for the copy/paste snippet, but this page doesn't rely on it.)
-3. **The backend accepts the page's origin.** Its `ALLOWED_ORIGINS` must include the page's origin: scheme, host and port, without any path. The default list already includes `https://mcaronnewrelic.github.io`, which covers any repository published there. To test from a local static server, add its origin too, for example `ALLOWED_ORIGINS=https://mcaronnewrelic.github.io,http://localhost:8080`. Setting `ALLOWED_ORIGINS` replaces the default list, so include the GitHub Pages origin as well.
+3. **The backend accepts the page's origin.** Its `ALLOWED_ORIGINS` must include the page's origin: scheme, host and port, without any path. The default list already includes `https://newrelicuniversity.github.io`, which covers any repository published there. To test from a local static server, add its origin too, for example `ALLOWED_ORIGINS=https://newrelicuniversity.github.io,http://localhost:8080`. Setting `ALLOWED_ORIGINS` replaces the default list, so include the GitHub Pages origin as well.
 
 If the page shows **"Agent added no trace headers"** for backend requests, step 2 is missing. If requests fail with a CORS error in the browser console, step 3 is. If it shows **"Backend started a new trace"**, the APM agent is not attached or has distributed tracing turned off.
 

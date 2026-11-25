@@ -4,7 +4,7 @@ Hands-on demo pages for the [New Relic browser agent](https://docs.newrelic.com/
 
 The pages need the Pro+SPA agent, the full version of the browser agent.
 
-**Try it:** [GitHub Pages](https://mcaronnewrelic.github.io/BrowserAgentPlayground/) or [browser.nru.to](https://browser.nru.to/).
+**Try it:** [GitHub Pages](https://newrelicuniversity.github.io/BrowserAgentPlayground/) or [browser.nru.to](https://browser.nru.to/).
 
 ## Where it runs
 
@@ -25,18 +25,18 @@ The pages form a learning path in six stages. Each page ends with an **Up next**
 
 | Stage | Page | What it shows |
 | --- | --- | --- |
-| | [Home](https://mcaronnewrelic.github.io/BrowserAgentPlayground/) (`index.html`) | What the site is, your name and session code, and every page by stage. |
-| Start here | [Install](https://mcaronnewrelic.github.io/BrowserAgentPlayground/install.html) (`install.html`) | The three ways to install the agent (copy/paste snippet, APM injection, npm), why data takes a minute to appear, and which feature writes which event type. |
-| What you get for free | [Core Web Vitals](https://mcaronnewrelic.github.io/BrowserAgentPlayground/vitals.html) (`vitals.html`) | Makes LCP (a slow hero image), CLS (late banners) and INP (blocking click handlers) good or poor on purpose, with a live scorecard. Results land in `PageViewTiming`. |
-| | [Errors](https://mcaronnewrelic.github.io/BrowserAgentPlayground/errors.html) (`errors.html`) | Uncaught errors and promise rejections, `noticeError()`, `setErrorHandler()` for ignoring and grouping, `addRelease()`, and how errors relate to ERROR logs. |
-| | [Frustration](https://mcaronnewrelic.github.io/BrowserAgentPlayground/frustration.html) (`frustration.html`) | Triggers rage click, dead click and error click detection, then queries your `UserAction` events. |
-| What you add | [Logs](https://mcaronnewrelic.github.io/BrowserAgentPlayground/logs.html) (`logs.html`) | Console auto-logging, `log()`, `wrapLogger()`, and how log verbosity filters events. |
-| | [Events](https://mcaronnewrelic.github.io/BrowserAgentPlayground/events.html) (`events.html`) | `addPageAction()` and `recordCustomEvent()` compared with the automatic `BrowserInteraction`. It shows that an AJAX call alone never creates a `BrowserInteraction`: that needs a route change followed by a DOM update. |
-| | [Marks & measures](https://mcaronnewrelic.github.io/BrowserAgentPlayground/measures.html) (`measures.html`) | `performance.mark()`, `performance.measure()` and `newrelic.measure()`, the live performance timeline, and the resulting `BrowserPerformance` events. Captured because `nr-init.js` turns on `performance.capture_marks` and `capture_measures`. |
-| Follow the network | [Tracing](https://mcaronnewrelic.github.io/BrowserAgentPlayground/tracing.html) (`tracing.html`) | Distributed tracing from the browser: the `traceparent`, `tracestate` and `newrelic` headers on each request, browser and server logs on the same trace, and a query built from your trace IDs. Add `?backend=none` for browser-only mode, which uses `data/*.json`. |
-| | [WebSockets](https://mcaronnewrelic.github.io/BrowserAgentPlayground/websockets.html) (`websockets.html`) | Turns on WebSocket tracking (`init.web_sockets.enabled`, on this page only) and opens sockets that close cleanly, close with a custom code, never open, throw in a message handler, or stay open across a reload. Then it queries the `WebSocket` events, one per connection. |
-| Single-page apps | [SPA API](https://mcaronnewrelic.github.io/BrowserAgentPlayground/spa.html) (`spa.html`) | Manual SPA tracking with the `interaction()` handle (`.save()`, `.ignore()`, `.setName()`, `.end()`, ...), `setCurrentRouteName()`, `setPageViewName()` and `finished()`: forcing, suppressing and renaming `BrowserInteraction` events. |
-| Privacy | [Replay](https://mcaronnewrelic.github.io/BrowserAgentPlayground/replay.html) (`replay.html`) | Session replay masks everything by default. `recordReplay()` and `pauseReplay()` start and stop it, and `nr-unmask`, `nr-block` and `nr-ignore` show the privacy controls live. |
+| | [Home](https://newrelicuniversity.github.io/BrowserAgentPlayground/) (`index.html`) | What the site is, your name and session code, and every page by stage. |
+| Start here | [Install](https://newrelicuniversity.github.io/BrowserAgentPlayground/install.html) (`install.html`) | The three ways to install the agent (copy/paste snippet, APM injection, npm), why data takes a minute to appear, and which feature writes which event type. |
+| What you get for free | [Core Web Vitals](https://newrelicuniversity.github.io/BrowserAgentPlayground/vitals.html) (`vitals.html`) | Makes LCP (a slow hero image), CLS (late banners) and INP (blocking click handlers) good or poor on purpose, with a live scorecard. Results land in `PageViewTiming`. |
+| | [Errors](https://newrelicuniversity.github.io/BrowserAgentPlayground/errors.html) (`errors.html`) | Uncaught errors and promise rejections, `noticeError()`, `setErrorHandler()` for ignoring and grouping, `addRelease()`, and how errors relate to ERROR logs. |
+| | [Frustration](https://newrelicuniversity.github.io/BrowserAgentPlayground/frustration.html) (`frustration.html`) | Triggers rage click, dead click and error click detection, then queries your `UserAction` events. |
+| What you add | [Logs](https://newrelicuniversity.github.io/BrowserAgentPlayground/logs.html) (`logs.html`) | Console auto-logging, `log()`, `wrapLogger()`, and how log verbosity filters events. |
+| | [Events](https://newrelicuniversity.github.io/BrowserAgentPlayground/events.html) (`events.html`) | `addPageAction()` and `recordCustomEvent()` compared with the automatic `BrowserInteraction`. It shows that an AJAX call alone never creates a `BrowserInteraction`: that needs a route change followed by a DOM update. |
+| | [Marks & measures](https://newrelicuniversity.github.io/BrowserAgentPlayground/measures.html) (`measures.html`) | `performance.mark()`, `performance.measure()` and `newrelic.measure()`, the live performance timeline, and the resulting `BrowserPerformance` events. Captured because `nr-init.js` turns on `performance.capture_marks` and `capture_measures`. |
+| Follow the network | [Tracing](https://newrelicuniversity.github.io/BrowserAgentPlayground/tracing.html) (`tracing.html`) | Distributed tracing from the browser: the `traceparent`, `tracestate` and `newrelic` headers on each request, browser and server logs on the same trace, and a query built from your trace IDs. Add `?backend=none` for browser-only mode, which uses `data/*.json`. |
+| | [WebSockets](https://newrelicuniversity.github.io/BrowserAgentPlayground/websockets.html) (`websockets.html`) | Turns on WebSocket tracking (`init.web_sockets.enabled`, on this page only) and opens sockets that close cleanly, close with a custom code, never open, throw in a message handler, or stay open across a reload. Then it queries the `WebSocket` events, one per connection. |
+| Single-page apps | [SPA API](https://newrelicuniversity.github.io/BrowserAgentPlayground/spa.html) (`spa.html`) | Manual SPA tracking with the `interaction()` handle (`.save()`, `.ignore()`, `.setName()`, `.end()`, ...), `setCurrentRouteName()`, `setPageViewName()` and `finished()`: forcing, suppressing and renaming `BrowserInteraction` events. |
+| Privacy | [Replay](https://newrelicuniversity.github.io/BrowserAgentPlayground/replay.html) (`replay.html`) | Session replay masks everything by default. `recordReplay()` and `pauseReplay()` start and stop it, and `nr-unmask`, `nr-block` and `nr-ignore` show the privacy controls live. |
 
 There's also a standalone **bonus exercise**, `noisy-neighbor.html`, that isn't part of the path above: a guided root-cause investigation that has students trace a slowdown from the app down to a CPU-hogging process on the host. Hand them the link directly. It pairs with [`exercises/noisy-neighbor/`](exercises/noisy-neighbor/README.md), which puts the load on the host.
 
@@ -156,7 +156,7 @@ visitor ──HTTPS 443──> Caddy (host) ──> 127.0.0.1:3000 ──> app c
 3. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/mcaronnewrelic/BrowserAgentPlayground.git
+   git clone https://github.com/NewRelicUniversity/BrowserAgentPlayground.git
    cd BrowserAgentPlayground
    ```
 

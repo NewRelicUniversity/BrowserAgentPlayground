@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { createServer } = require('./server.js');
 
-const ORIGIN = 'https://mcaronnewrelic.github.io';
+const ORIGIN = 'https://newrelicuniversity.github.io';
 const TP = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
 
 // Records what the server asks the APM agent to do.
